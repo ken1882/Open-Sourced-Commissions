@@ -51,10 +51,8 @@ $imported["COMP_EECI"] = true
 #       .contents_height    [overwrite]
 #       .refresh            [overwrite]
 #       .draw_item          [overwrite]
-#       .initialize         [alias]     as: init_ecci
-#       .update             [alias]     as: update_ecci
-#       .update_scroll      [new]
-#       .compare_diff       [new]
+#       .initialize         [alias]     as: init_eeci
+#       .update             [alias]     as: update_eeci
 #=============================================================================
 
 # Enable this script?
@@ -165,11 +163,6 @@ module COMP
       :slot_type      => [FEATURE_SLOT_TYPE, 'Slot Type'],          # Slot Type
       :action_plus    => [FEATURE_ACTION_PLUS, 'Action Times+'],    # Action Times+
       :party_ability  => [FEATURE_PARTY_ABILITY, 'Party ability'],  # Party ability
-      # --- Special Feature Flags ---
-      :flag_id_auto_battle    => [FLAG_ID_AUTO_BATTLE, 'Special'],       # auto battle
-      :flag_id_guard          => [FLAG_ID_GUARD, 'Special'],             # guard
-      :flag_id_substitute     => [FLAG_ID_SUBSTITUTE, 'Special'],        # substitute
-      :flag_id_preserve_tp    => [FLAG_ID_PRESERVE_TP, 'Special'],       # preserve TP
     }
     #---------------------------------------------------------------------
     # * Display order of comparison group text, upper one displayed first
@@ -278,6 +271,8 @@ module COMP
     #   true/false  = add/remove after equip
     # :display_str > Other text displayed
 
+    CurFeatureShow = [-1]
+
     #--------------------------------------------------------------------------
     # * Mapping table for easier query
     StringTable  = {}
@@ -373,10 +368,18 @@ class Scene_Equip < Scene_MenuBase
   #--------------------------------------------------------------------------
   # * alias: slot [OK]
   #--------------------------------------------------------------------------
-  alias on_slot_ok_ecci on_slot_ok
+  alias on_slot_ok_eeci on_slot_ok
   def on_slot_ok
     @status_window.set_template_item(@actor.equips.at(@slot_window.index))
-    on_slot_ok_ecci
+    on_slot_ok_eeci
+  end
+  #--------------------------------------------------------------------------
+  # alias: create_status_window
+  #--------------------------------------------------------------------------
+  alias create_status_window_eeci create_status_window
+  def create_status_window
+    create_status_window_eeci
+    @status_window.collect_current_feature
   end
 end
 #==============================================================================
@@ -386,10 +389,10 @@ class Window_EquipItem < Window_ItemList
   #--------------------------------------------------------------------------
   # * alias: update help
   #--------------------------------------------------------------------------
-  alias update_help_ecci update_help
+  alias update_help_eeci update_help
   def update_help
     @status_window.set_compare_item(item) if @actor && @status_window
-    update_help_ecci
+    update_help_eeci
   end
 end
 #==============================================================================
@@ -399,10 +402,13 @@ class Window_EquipSlot < Window_Selectable
   #---------------------------------------------------------------------------
   # * alias: refresh
   #---------------------------------------------------------------------------
-  alias refresh_ecci refresh
+  alias refresh_eeci refresh
   def refresh
-    refresh_ecci
-    @status_window.set_base_actor(@actor) if @status_window
+    refresh_eeci
+    return unless @status_window
+    @status_window.set_base_actor(@actor)
+    @status_window.collect_current_feature
+    @status_window.draw_current_feature
   end
 end
 #==============================================================================
@@ -427,7 +433,7 @@ class Window_EquipStatus < Window_Base
     @feature_cache  = {}
     @base_actor     = nil
     init_eeci(*args)
-    @visible_height = height - standard_padding * 2
+    @visible_height = height
   end
   #---------------------------------------------------------------------------
   # * Overwrite methods: contents height
@@ -453,7 +459,7 @@ class Window_EquipStatus < Window_Base
     if Input.trigger?(Key_scrollup) || Input.press?(Key_scrollup)
       self.oy = [self.oy - delta, 0].max if self.oy > 0
     elsif Input.trigger?(Key_scrolldown) || Input.press?(Key_scrolldown)
-      by = [@bottom_oy + 4 - @visible_height, 0].max
+      by = [@bottom_oy - @visible_height + standard_padding * 3, 0].max
       self.oy = [self.oy + delta, by].min if self.oy < by
     end
   end
@@ -475,6 +481,15 @@ class Window_EquipStatus < Window_Base
     @base_actor = actor
   end
   #---------------------------------------------------------------------------
+  # * Overwrite method: actor=
+  #---------------------------------------------------------------------------
+  def actor=(actor)
+    return if @actor == actor
+    @actor = actor
+    collect_current_feature
+    refresh
+  end
+  #---------------------------------------------------------------------------
   # * Overwrite method: refresh
   #---------------------------------------------------------------------------
   def refresh
@@ -483,41 +498,53 @@ class Window_EquipStatus < Window_Base
     @bottom_oy = 1
     self.arrows_visible = false
     @difference.clear
-    return unless @temp_actor && @actor
-    return unless @template_item && @compare_item
-    compare_diffs
-    line_number  = @difference.keys.count{|k| (@difference[k] || []).size > 0 && StringTable[k].length > 0}
-    line_number += @difference.values.flatten.size
+    
+    return unless @actor
+    if @temp_actor && @compare_item && @template_item
+      compare_diffs
+      list = @difference
+    else
+      list = @current_feature
+    end
+    return if list.nil?
+    line_number  = list.keys.count{|k| (list[k] || []).size > 0 && StringTable[k].length > 0}
+    line_number += list.values.flatten.size
     @bottom_oy   = ([line_number, MaxDrawLine].min) * line_height
     create_contents
     self.arrows_visible = @bottom_oy > @visible_height
-    draw_comapre_result
+    draw_compare_result(list == @current_feature)
   end
   #---------------------------------------------------------------------------
-  def compare_diffs
+  def collect_current_feature
+    return unless @actor
+    @current_feature = {}
+    compare_diffs(true)
+  end
+  #---------------------------------------------------------------------------
+  def compare_diffs(show_current = false)
     en_prefix   = [FeatureDisableText, FeatureEnableText]
     ComparisonTable.each do |symbol, info|
       feature_id  = info[0]
       display_str = info[1]
       case symbol
-      when :param;        compare_param();
-      when :param_rate;   compare_valued_feature(feature_id, true)
-      when :xparam;       compare_features_sum(feature_id);
-      when :sparam;       compare_features_pi(feature_id);
-      when :skill_add;    compare_features_set(feature_id);
-      when :skill_seal;   compare_features_set(feature_id, en_prefix.reverse);
-      when :element_rate; compare_features_pi(feature_id);
-      when :atk_element;  compare_features_set(feature_id);
-      when :atk_state;    compare_valued_feature(feature_id, false);
-      when :state_rate;   compare_features_pi(feature_id);
-      when :state_resist; compare_features_set(feature_id);
-      when :stype_seal;   compare_features_set(feature_id, en_prefix.reverse);
-      when :stype_add;    compare_features_set(feature_id, en_prefix);
-      when :atk_speed;    compare_features_sum(feature_id);
-      when :atk_times;    compare_features_sum(feature_id);
-      when :action_plus;  compare_action_plus(feature_id);
-      when :special_flag; compare_special_flag(feature_id);
-      when :party_ability;compare_party_ability(feature_id);
+      when :param;        compare_param(show_current);
+      when :param_rate;   compare_valued_feature(show_current,feature_id, true)
+      when :xparam;       compare_features_sum(show_current,feature_id);
+      when :sparam;       compare_features_pi(show_current,feature_id);
+      when :skill_add;    compare_features_set(show_current,feature_id);
+      when :skill_seal;   compare_features_set(show_current,feature_id, en_prefix.reverse);
+      when :element_rate; compare_features_pi(show_current,feature_id);
+      when :atk_element;  compare_features_set(show_current,feature_id);
+      when :atk_state;    compare_valued_feature(show_current,feature_id, false);
+      when :state_rate;   compare_valued_feature(show_current,feature_id, true);
+      when :state_resist; compare_features_set(show_current,feature_id);
+      when :stype_seal;   compare_features_set(show_current,feature_id, en_prefix.reverse);
+      when :stype_add;    compare_features_set(show_current,feature_id, en_prefix);
+      when :atk_speed;    compare_features_sum(show_current,feature_id);
+      when :atk_times;    compare_features_sum(show_current,feature_id);
+      when :action_plus;  compare_action_plus(show_current,feature_id);
+      when :special_flag; compare_special_flag(show_current,feature_id);
+      when :party_ability;compare_party_ability(show_current,feature_id);
       end
     end # ComparisonTable.each
   end
@@ -531,23 +558,40 @@ class Window_EquipStatus < Window_Base
     return index * 10000 + feature_id
   end
   #---------------------------------------------------------------------------
-  def compare_param(feature_id = FEATURE_PARAM)
+  def compare_param(show_current,feature_id = FEATURE_PARAM)
     ar = get_feature_array(feature_id)
     len = ar.size
     len.times do |i|
+      str = get_feature_name(feature_id, i)
+      # Show current actor feature status
+      if show_current
+        v = @actor.param(i)
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(-1,i,[v,v],str)
+        next
+      end
+      # Comparison
       a = @compare_item.param(i)
       b = @template_item.param(i)
       next if a - b == 0
       a += get_cache_feature(i, :param, i)
       b += get_cache_feature(i, :param, i)
-      str = get_feature_name(feature_id, i)
       (@difference[-1] ||= []) << DiffInfo.new(-1, i, [a,b], str)
     end
   end
   #---------------------------------------------------------------------------
-  def compare_features_sum(feature_id)
+  def compare_features_sum(show_current,feature_id)
     ar = get_feature_array(feature_id); len = ar.size;
     if len == 0
+      str = get_feature_name(feature_id)
+      # Show current actor feature status
+      if show_current
+        return unless CurFeatureShow.include?(feature_id)
+        v = @actor.features_sum_all(feature_id)
+        return if v == 0
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,0,[v,v],str)
+        return
+      end
+      # Comparison
       a = @compare_item.features_sum_all(feature_id)
       b = @template_item.features_sum_all(feature_id)
       delta = (a - b)
@@ -555,10 +599,19 @@ class Window_EquipStatus < Window_Base
       return if delta == 0
       a += get_cache_feature(feature_id, :features_sum_all, feature_id)
       b += get_cache_feature(feature_id, :features_sum_all, feature_id)
-      str = get_feature_name(feature_id)
       (@difference[feature_id] ||= []) << DiffInfo.new(feature_id, 0, [a,b], str)
     else
       len.times do |i|
+        str = get_feature_name(feature_id, i)
+        # Show current actor feature status
+        if show_current
+          return unless CurFeatureShow.include?(feature_id)
+          v = @actor.features_sum(feature_id, i)
+          next if v == 0
+          (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
+          next
+        end
+        # Comparison
         a = @compare_item.features_sum(feature_id, i)
         b = @template_item.features_sum(feature_id, i)
         delta = (a - b)
@@ -566,15 +619,24 @@ class Window_EquipStatus < Window_Base
         next if delta == 0
         a += get_cache_feature(hash_feature_idx(feature_id, i), :features_sum, feature_id, i)
         b += get_cache_feature(hash_feature_idx(feature_id, i), :features_sum, feature_id, i)
-        str = get_feature_name(feature_id, i)
         (@difference[feature_id] ||= []) << DiffInfo.new(feature_id, i, [a,b], str)
-      end
-    end
+      end # len.times
+    end # if len ==0
   end
   #---------------------------------------------------------------------------
-  def compare_features_pi(feature_id)
+  def compare_features_pi(show_current, feature_id)
     ar = get_feature_array(feature_id); len = ar.size;
     len.times do |i|
+      str = get_feature_name(feature_id, i)
+      # Show current actor feature status
+      if show_current
+        return unless CurFeatureShow.include?(feature_id)
+        v = @actor.features_pi(feature_id, i)
+        next if v == 1.0
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
+        next
+      end
+      # Comparison
       a = @compare_item.features_pi(feature_id, i)
       b = @template_item.features_pi(feature_id, i)
       delta = (a - b)
@@ -582,12 +644,22 @@ class Window_EquipStatus < Window_Base
       next if delta == 0
       a *= get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
       b *= get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
-      str = get_feature_name(feature_id, i)
       (@difference[feature_id] ||= []) << DiffInfo.new(feature_id, i, [a,b], str)
     end
   end
   #---------------------------------------------------------------------------
-  def compare_features_set(feature_id, prefix = [FeatureRemoveText, FeatureAddText])
+  def compare_features_set(show_current,feature_id, prefix = [FeatureRemoveText, FeatureAddText])
+    # Show current actor feature status
+    if show_current
+      return unless CurFeatureShow.include?(feature_id)
+      feats = @actor.features_set(feature_id)
+      feats.each do |i|
+        str = sprintf(prefix[1], get_feature_name(feature_id, i))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,true,str)
+      end
+      return
+    end
+    # Comparison
     after  = @compare_item.features_set(feature_id)
     before = @template_item.features_set(feature_id)
     
@@ -602,7 +674,25 @@ class Window_EquipStatus < Window_Base
     end
   end
   #---------------------------------------------------------------------------
-  def compare_valued_feature(feature_id, pi)
+  def compare_valued_feature(show_current,feature_id, pi)
+    # Show current actor feature status
+    if show_current
+      return unless CurFeatureShow.include?(feature_id)
+      feats = @actor.features_set(feature_id)
+      feats.each do |i|
+        str = get_feature_name(feature_id, i)
+        if pi
+          v = @actor.features_pi(feature_id, i)
+          next if v == 1
+        else
+          v = @actor.features_sum(feature_id, i)
+          next if v == 0
+        end
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
+      end # each feat
+      return
+    end
+    # Comparison
     after  = @compare_item.features_set(feature_id)
     before = @template_item.features_set(feature_id)
     prefix = [FeatureRemoveText, FeatureAddText]
@@ -624,9 +714,20 @@ class Window_EquipStatus < Window_Base
     end
   end
   #---------------------------------------------------------------------------
-  def compare_action_plus(feature_id)
-    after  = @compare_item.action_plus_set
-    before = @template_item.action_plus_set
+  def compare_action_plus(show_current,feature_id)
+    # Show current actor feature status
+    if show_current
+      return unless CurFeatureShow.include?(feature_id)
+      ar = @actor.action_plus_set.sort{|a,b| b <=> a}
+      ar.each_with_index do |v,i|
+        str = sprintf(get_feature_name(feature_id), i)
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
+      end
+      return
+    end
+    # Comparison
+    after  = @compare_item.action_plus_set.sort{|a,b| b <=> a}
+    before = @template_item.action_plus_set.sort{|a,b| b <=> a}
     return if after.size == 0 && before.size == 0
     n = [after.size, before.size].max
     n.times do |i|
@@ -637,26 +738,46 @@ class Window_EquipStatus < Window_Base
     end
   end
   #---------------------------------------------------------------------------
-  def compare_special_flag(feature_id, prefix = [FeatureRemoveText, FeatureAddText])
-    ar = SpecialFeatureName; len = ar.size;
-    len.times do |i|
+  def compare_special_flag(show_current,feature_id, prefix = [FeatureRemoveText, FeatureAddText])
+    ar = SpecialFeatureName
+    ar.each do |i, str|
+      # Show current actor feature status
+      if show_current
+        return unless CurFeatureShow.include?(feature_id)
+        en = @actor.special_flag(i)
+        next unless en
+        str = sprintf(prefix[1], str)
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,true,str)
+        next
+      end
+      # Comparison
       before = @template_item.special_flag(i)
       after  = @compare_item.special_flag(i)
-      return if before == after
+      next if before == after
       enabled = after ? 1 : 0
-      str = sprintf(prefix[i], ar[i])
+      str = sprintf(prefix[enabled], str)
       (@difference[feature_id] ||= []) << DiffInfo.new(feature_id, i, after, str)
     end
   end
   #---------------------------------------------------------------------------
-  def compare_party_ability(feature_id, prefix = [FeatureRemoveText, FeatureAddText])
-    ar = PartyAbilityName; len = ar.size;
-    len.times do |i|
-      before = @template_item.special_flag(i)
-      after  = @compare_item.special_flag(i)
-      return if before == after
+  def compare_party_ability(show_current,feature_id, prefix = [FeatureRemoveText, FeatureAddText])
+    ar = PartyAbilityName
+    ar.each do |i, str|
+      # Show current actor feature status
+      if show_current
+        return unless CurFeatureShow.include?(feature_id)
+        en = @actor.party_ability(i)
+        next unless en
+        str = sprintf(prefix[1], str)
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,true,str)
+        next
+      end
+      # Comparison
+      before = @template_item.party_ability(i)
+      after  = @compare_item.party_ability(i)
+      next if before == after
       enabled = after ? 1 : 0
-      str = sprintf(prefix[i], ar[i])
+      str = sprintf(prefix[enabled], str)
       (@difference[feature_id] ||= []) << DiffInfo.new(feature_id, i, after, str)
     end
   end
@@ -707,10 +828,15 @@ class Window_EquipStatus < Window_Base
     end
   end
   #---------------------------------------------------------------------------
-  def draw_comapre_result
+  def draw_current_feature
+    draw_compare_result(true)
+  end
+  #---------------------------------------------------------------------------
+  def draw_compare_result(cur_feat = false)
+    p 'draw compare result'
     counter = 0
-    
-    diff = @difference.sort_by{|k, dar|
+    list = cur_feat ? @current_feature : @difference
+    diff = list.sort_by{|k, dar|
       DisplayOrder[StringTable[dar.first.feature_id]] ? DisplayOrder[StringTable[dar.first.feature_id]] : DisplayOrder[MISC_text]
     }.collect{|p| p[1]}
     last_display_group = ''
@@ -750,7 +876,7 @@ class Window_EquipStatus < Window_Base
       if inverse
         a ^= 1; b ^= 1;
       end
-      puts "delta: #{a - b}, v: #{info.value}, i: #{StringTable[info.feature_id]}"
+      
       change_color(param_change_color(a - b))
 
       # draw skill change with the icon
