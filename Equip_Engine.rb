@@ -255,7 +255,7 @@ module YEA
     #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
     # This sets the font size used for the status window in the lower right
     # corner of the screen (which shows stats and comparisons).
-    STATUS_FONT_SIZE = 14
+    STATUS_FONT_SIZE = 20
     
     # This sets the remove equip command in the item window.
     REMOVE_EQUIP_ICON = 185
@@ -1020,10 +1020,10 @@ class Window_EquipSlot < Window_Selectable
   
 end # Window_EquipSlot
 
-#==============================================================================
-# ■ Window_EquipItem
-#==============================================================================
 
+#==============================================================================
+# ** Window_EquipItem
+#==============================================================================
 class Window_EquipItem < Window_ItemList
   
   #--------------------------------------------------------------------------
