@@ -39,14 +39,37 @@ $imported["COMP_EECI"] = true
 #=============================================================================#
 #                            ** Compatibility **                              #
 #-----------------------------------------------------------------------------#
+#   > Require keyboard input script created By Cidiomar R. Dias Junior        #
 #   > Compatible with YEA Equip Engine                                        #
 #   > Support comparison with 'Equipment Set Bonuses' by Modern Algebra       #
 #                                                                             #
 #       ** Place this script below the scripts mentioned above **             #
 #=============================================================================#
+# > Code compatibility details of classes and methods
+#
+#   - Window_EquipStatus
+#       .contents_height    [overwrite]
+#       .refresh            [overwrite]
+#       .draw_item          [overwrite]
+#       .initialize         [alias]     as: init_eeci
+#       .update             [alias]     as: update_eeci
+#=============================================================================
 
 # Enable this script?
 COMP_EECI_Enable = true
+#------------------------------------------------------------------------------
+# * Check whether Keyboard input script imported, raise inforamtion and disable
+#   the script if none.
+#------------------------------------------------------------------------------
+begin
+  _ = Input::KEYMAP
+rescue => NameError
+  info = "Keymap is not detected, please make sure you have keyboard input" +
+          " script in your project and placed above this script!\n\n" + 
+          "The EECI script will be disabled."
+  msgbox(info)
+  COMP_EECI_Enable = false
+end
 
 if COMP_EECI_Enable
 #=============================================================================
@@ -89,29 +112,35 @@ module COMP
     FLAG_ID_GUARD           =   Game_BattlerBase::FLAG_ID_GUARD           # guard
     FLAG_ID_SUBSTITUTE      =   Game_BattlerBase::FLAG_ID_SUBSTITUTE      # substitute
     FLAG_ID_PRESERVE_TP     =   Game_BattlerBase::FLAG_ID_PRESERVE_TP     # preserve TP
-    #=====================================================================#
-    # *                     v Free to Edit v                              #
-    #=====================================================================#
-    # * The next/last page keybind, edit the value for your own need.
+    
     #=====================================================================
-    Key_nextpage  = :RIGHT
-    Key_lastpage  = :LEFT
+    # * The scroll-up and scroll-down keybind, edit the value for your own
+    # need. For example, if you want 'I' and 'K' for scroll up/down,
+    # edit the 
+    # 'Input::KEYMAP[:LETTER_R]' to 'Input::KEYMAP[:LETTER_I]' and
+    # 'Input::KEYMAP[:LETTER_F]' to 'Input::KEYMAP[:LETTER_K]'.
+    # Take a look at the keyboard script for all supported key and symbol
+    #=====================================================================
+    Key_scrollup    = Input::KEYMAP[:LETTER_R]
+    Key_scrolldown  = Input::KEYMAP[:LETTER_F]
     #---------------------------------------------------------------------
     # * Text displayed when showing the comparison of set equipment bonus
-    SetEquipmentTextStem = "Set bonus"
-    SetEquipmentText = SetEquipmentTextStem + " [%s]:"
+    SetEquipmentText = "Set bonus:"
     #---------------------------------------------------------------------
-    # * Id for standard param
-    FeatureNormalParam = -1
+    # * Scrolling speed, aka the delta-y per frame
+    Scrollspeed     = 4
+    #---------------------------------------------------------------------
+    # * How many lines of comparison should be listed at most? If the
+    #   differences between two equipments are more than this number, the
+    #   surplus won't be displayed to prevent the lag.
+    MaxDrawLine  = 30
     #---------------------------------------------------------------------
     # * The param/feature considered to compare
     ComparisonTable = {        
-      #    better not touch      edit the text for your need
-      #    ↓              ↓                 ↓       
       # symbol        => [id,  display group text showed in comparison]
-      :param          => [FeatureNormalParam, ''],                  # Basic parameter
-      :xparam         => [FEATURE_XPARAM, ''],                      # Ex-Parameter
-      :sparam         => [FEATURE_SPARAM, ''],                      # Sp-Parameter
+      :param       => [-1, ''],                                     # Basic parameter
+      :xparam      => [FEATURE_XPARAM, ''],                         # Ex-Parameter
+      :sparam      => [FEATURE_SPARAM, ''],                         # Sp-Parameter
 
       :param_rate     => [FEATURE_PARAM, 'Param multipler'],        # Parameter
       :special_flag   => [FEATURE_SPECIAL_FLAG, 'Special'],         # Special feature flag
@@ -121,8 +150,8 @@ module COMP
       :state_resist   => [FEATURE_STATE_RESIST, 'State Resist'],    # State Resist
       :atk_element    => [FEATURE_ATK_ELEMENT, 'Atk Element'],      # Atk Element
       :atk_state      => [FEATURE_ATK_STATE, 'Atk State'],          # Atk State
-      :atk_speed      => [FEATURE_ATK_SPEED, 'Feature'],            # Atk Speed
-      :atk_times      => [FEATURE_ATK_TIMES, 'Feature'],            # Atk Times+
+      :atk_speed      => [FEATURE_ATK_SPEED, 'Feature'],          # Atk Speed
+      :atk_times      => [FEATURE_ATK_TIMES, 'Feature'],         # Atk Times+
       :stype_add      => [FEATURE_STYPE_ADD, 'Add Skill Type'],     # Add Skill Type
       :stype_seal     => [FEATURE_STYPE_SEAL, 'Disable Skill Type'],# Disable Skill Type
       :skill_add      => [FEATURE_SKILL_ADD, 'Add Skill'],          # Add Skill
@@ -136,17 +165,14 @@ module COMP
       :party_ability  => [FEATURE_PARTY_ABILITY, 'Party ability'],  # Party ability
     }
     #---------------------------------------------------------------------
-    # * Id for equipment set
-    FeatureEquipSet = -2
-    #---------------------------------------------------------------------
     # * Compare with MA's equipment set diff
     if $imported[:MA_EquipmentSetBonuses]
-      ComparisonTable[:equipset_plus] = [FeatureEquipSet, SetEquipmentText]
+      FeatureEquipSet = -2
+      ComparisonTable[:equipset_plus] = [FeatureEquipSet, 'Equipment Set Bonus']   
     end
     #---------------------------------------------------------------------
-    MISC_text = 'Other' # the group text not in this order list
-    #---------------------------------------------------------------------
     # * Display order of comparison group text, upper one displayed first
+    MISC_text = 'Other' # the group text not in this order list
     TextDisplayOrder = [
       '',         # suggestion: better not touch this line
       'Feature',
@@ -172,7 +198,7 @@ module COMP
       'Action Times+',
       'Party ability',
       MISC_text,
-      SetEquipmentText,
+      'Equipment Set Bonus',
     ]
     #---------------------------------------------------------------------
     # * Name display for each xparam
@@ -223,54 +249,43 @@ module COMP
     #--------------------------------------------------------------------------
     # * Feature name displayed at first of the line, before value comparison
     OtherFeatureName = {
-      # feature id        => display name
       FEATURE_ATK_SPEED   => 'ASP',
       FEATURE_ATK_TIMES   => 'ATS+',
       FEATURE_ACTION_PLUS => '+%d:',
     }
     #---------------------------------------------------------------------
     # * prefix of single feature comparison
-    FeatureAddText     = "+" + " %s"
-    FeatureRemoveText  = "-" + " %s"
-    FeatureEnableText  = "√" + " %s"
-    FeatureDisableText = "X" + " %s"
+    FeatureAddText     = "+ %s"
+    FeatureRemoveText  = "- %s"
+    FeatureEnableText  = "√ %s"
+    FeatureDisableText = "X %s"
     #---------------------------------------------------------------------
-    # * The feature id that is actually not good
     InverseColorFeature = [FEATURE_STYPE_SEAL, FEATURE_SKILL_SEAL]
-    #---------------------------------------------------------------------
-    # * The value of given feature id will disaply as percent
     PercentageFeaure = [
       FEATURE_ELEMENT_RATE, FEATURE_DEBUFF_RATE, FEATURE_STATE_RATE,
       FEATURE_PARAM, FEATURE_XPARAM, FEATURE_SPARAM, FEATURE_ATK_STATE,
       FEATURE_ACTION_PLUS, 
-    ]
-    #--------------------------------------------------------------------------
-    # * Features that shows in status window when not comparing stuff
-    CurFeatureShow = [
-      FeatureNormalParam, FEATURE_PARTY_ABILITY, FEATURE_SKILL_ADD, FeatureEquipSet,
     ]
     #=====================================================================#
     # Please don't edit anything below unless you know what you're doing! #
     #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^#
 
     # Strcuture holds compare result of each difference
-    DiffInfo = Struct.new(:feature_id, :data_id, :value, :display_str, :group_text)
-    # :feature_id  > what do you expect me to say?
-    # :data_id     > data id in grouped feature, such as param
-    # :delta       > value changed of that feature, in certain feature id is:
-    #   true/false = add/remove after equip
-    #
+    DiffInfo = Struct.new(:feature_id, :data_id, :value, :display_str)
+    # :feature_id > what do you expect me to say?
+    # :data_id    > data id in grouped feature, such as param
+    # :delta      > value changed of that feature, in certain feature id is:
+    #   true/false  = add/remove after equip
     # :display_str > Other text displayed
-    # :group_text  > even need to explain?
 
-    # Uses to fill the small blanks where not proper to write more lines
-    DummyInfo = DiffInfo.new(nil, nil, nil, '')
+    CurFeatureShow = [-1]
+
     #--------------------------------------------------------------------------
     # * Mapping table for easier query
-    StringTable     = {}   # feature_id => group_text
-    FeatureIdTable  = {}   # group_text => feature_id
-    DisplayOrder    = {}   # group_text => order
-    DisplayIdOrder  = {}   # feature_id => order
+    StringTable  = {}   # feature_id   => display_text
+    FeatureIdTable = {} # display_text => feature_id
+    DisplayOrder = {}   # display_text => order
+    DisplayIdOrder = {} # feature_id   => order
     ComparisonTable.each do |symbol, info|
       StringTable[info[0]] = info[1]
       FeatureIdTable[info[1]] = info[0]
@@ -279,9 +294,12 @@ module COMP
       DisplayOrder[str] = i
       DisplayIdOrder[FeatureIdTable[str]] = i
     end
+    #--------------------------------------------------------------------------
+    # * Dummy equipment for optimaztion
+    Dummy = RPG::Weapon.new
   end
 end
-
+puts "#{COMP::EECI::DisplayIdOrder}"
 #==========================================================================
 # ** RPG::BaseItem
 #--------------------------------------------------------------------------
@@ -358,13 +376,6 @@ class RPG::EquipItem < RPG::BaseItem
   end
   #---------------------------------------------------------------------------
 end
-
-module COMP::EECI
-  #--------------------------------------------------------------------------
-  # * Dummy equipment for which compare side is nil
-  Dummy = RPG::Weapon.new
-  Dummy.features.clear
-end
 #==============================================================================
 # ** Scene_Equip
 #==============================================================================
@@ -374,10 +385,16 @@ class Scene_Equip < Scene_MenuBase
   #--------------------------------------------------------------------------
   alias on_slot_ok_eeci on_slot_ok
   def on_slot_ok
-    item = @actor.equips.at(@slot_window.index)
-    item = COMP::EECI::Dummy if item.nil?
-    @status_window.set_template_item(item)
+    @status_window.set_template_item(@actor.equips.at(@slot_window.index))
     on_slot_ok_eeci
+  end
+  #--------------------------------------------------------------------------
+  # alias: create_status_window
+  #--------------------------------------------------------------------------
+  alias create_status_window_eeci create_status_window
+  def create_status_window
+    create_status_window_eeci
+    @status_window.collect_current_feature
   end
 end
 #==============================================================================
@@ -419,45 +436,31 @@ class Window_EquipStatus < Window_Base
   # * Instance variables
   #---------------------------------------------------------------------------
   attr_reader :template_item, :compare_item, :base_actor, :feature_cache
-  attr_reader :pages, :page_index, :base_pages
+  attr_reader :difference, :equipset_diff
+  attr_reader :set_difference if EQS_Enable
   #---------------------------------------------------------------------------
   # * Alias method: initialize
   #---------------------------------------------------------------------------
   alias init_eeci initialize
   def initialize(*args)
-    @line_max       = 0     # Cache max line for faster query
-    @feature_cache  = {}    # Cache feature value for faster query
-    @pages          = []    # Comparison result array
-    @base_pages     = []    # Actor current status array
-    @page_index     = 0     # Current page index
-    @base_actor     = nil   # For caching paramters
-    @fiber          = nil   # Coroutine fiber
-    @cw = nil               # Contents width, for window arrows hacks
-    collect_compare_priority
+    @bottom_oy      = 1
+    @difference     = {}
+    @equipset_diff  = {}
+    @feature_cache  = {}
+    @base_actor     = nil
     init_eeci(*args)
-    @ori_contents_width = width - standard_padding * 2  # the 'real' contents width
     @visible_height = height
-  end
-  #---------------------------------------------------------------------------
-  # * Comparsion priority according to display order
-  #--------------------------------------------------------------------------
-  def collect_compare_priority
-    @compare_quque = []
-    @compare_quque = ComparisonTable.sort_by{|k, dar|
-      DisplayOrder[StringTable[dar.first]] ? DisplayOrder[StringTable[dar.first]] : DisplayOrder[MISC_text]
-    }.collect{|p| p[0]}
   end
   #---------------------------------------------------------------------------
   # * Dummy method, does nothing
   #---------------------------------------------------------------------------
-  def pass(*args, &block)
+  def pass(*args)
   end
   #---------------------------------------------------------------------------
-  # * Max lines can be displayed in window at once
-  #--------------------------------------------------------------------------
-  def line_max
-    return @line_max if @line_max
-    return @line_max = contents_height / line_height
+  # * Overwrite methods: contents height
+  #---------------------------------------------------------------------------
+  def contents_height
+    @bottom_oy
   end
   #---------------------------------------------------------------------------
   # * Alias method: update
@@ -465,63 +468,20 @@ class Window_EquipStatus < Window_Base
   alias update_eeci update
   def update
     update_eeci
-    update_page
+    update_scroll
   end
   #---------------------------------------------------------------------------
-  # * update page next/last
+  # * New method: update scroll
   #---------------------------------------------------------------------------
-  def update_page
-    current_pages = @temp_actor.nil? ? @base_pages : @pages
-    if Input.trigger?(Key_nextpage)
-      next_page = @page_index + 1
-      resume_comparison if current_pages[next_page * line_max].nil? && !compare_over?
-      if current_pages[next_page * line_max]
-        # pre-compare next page if coroutine is still running
-        resume_comparison unless compare_over?
-        @page_index = next_page
-        update_arrows(current_pages)
-        draw_page(@temp_actor.nil?, @page_index)
-      end
-    elsif Input.trigger?(Key_lastpage) && @page_index > 0
-      @page_index -= 1
-      update_arrows(current_pages)
-      draw_page(@temp_actor.nil?, @page_index)
-    end
-  end
-  #---------------------------------------------------------------------------
-  def contents_width
-    return super if @cw.nil?
-    return @cw
-  end
-  #---------------------------------------------------------------------------
-  # * Determine window arrow display
-  #---------------------------------------------------------------------------
-  def update_arrows(current_pages)
-    @dx = 0
-    self.ox = 0
-    offset = standard_padding * 4
-    @cw = @ori_contents_width
-    lv = true if @page_index > 0
-    rv = current_pages[(@page_index + 1) * line_max].nil? ? false : true
-    if lv # show left arrow
-      @cw += offset
-      @dx     = offset
-      self.ox = offset
-    end
-    @cw += offset if rv # show right arrow
-    create_contents
-  end
-  #---------------------------------------------------------------------------
-  def compare_over?
-    @fiber == nil
-  end
-  #---------------------------------------------------------------------------
-  def resume_comparison
-    return if @fiber.nil?
-    begin
-      @fiber.resume
-    rescue FiberError => e
-      @fiber = nil
+  def update_scroll
+    return unless self.arrows_visible
+    delta = Scrollspeed
+    delta *= 3 if Input.press?(Input::SHIFT)
+    if Input.trigger?(Key_scrollup) || Input.press?(Key_scrollup)
+      self.oy = [self.oy - delta, 0].max if self.oy > 0
+    elsif Input.trigger?(Key_scrolldown) || Input.press?(Key_scrolldown)
+      by = [@bottom_oy - @visible_height + standard_padding * 3, 0].max
+      self.oy = [self.oy + delta, by].min if self.oy < by
     end
   end
   #---------------------------------------------------------------------------
@@ -555,70 +515,41 @@ class Window_EquipStatus < Window_Base
   #---------------------------------------------------------------------------
   def refresh
     contents.clear
-    @cw = nil
-    @pages      = []
-    @page_index =  0
+    self.oy    = 0
+    @bottom_oy = 1
+    self.arrows_visible = false
+    @difference.clear
+    
     return unless @actor
-    start_compare(:diff) if @temp_actor
-    stage = (@temp_actor) ? :diff : :current
-    resume_comparison
-    draw_compare_result(stage == :current)
+    if @temp_actor && @compare_item && @template_item
+      compare_diffs
+      list = @difference
+      p 'refresh 1'
+    else
+      list = @current_feature
+      p 'refresh 2'
+    end
+    return if list.nil?
+    line_number  = list.keys.count{|k| (list[k] || []).size > 0 && StringTable[k].length > 0}
+    line_number += list.values.flatten.size
+    @bottom_oy   = ([line_number, MaxDrawLine].min) * line_height
+    create_contents
+    self.arrows_visible = @bottom_oy > @visible_height
+    draw_compare_result(list == @current_feature)
   end
   #---------------------------------------------------------------------------
   def collect_current_feature
     return unless @actor
-    start_compare(:current, true)
-  end
-  #---------------------------------------------------------------------------
-  def start_compare(stage = :diff, restart = false)
-    if stage == :diff
-      save_fiber if !compare_over?
-      @fiber = Fiber.new{compare_diffs(stage)}
-    elsif stage == :current
-      if restart
-        release_fiber
-        @current_feature = {}
-        @base_pages      = []
-        @fiber = Fiber.new{compare_diffs(stage)}
-      elsif @saved_fiber
-        load_fiber
-      end
-    else
-      raise ArgumentError, "Invalid stage symbol (#{stage})"
-    end
-    resume_comparison
-  end
-  #---------------------------------------------------------------------------
-  def save_fiber
-    @saved_fiber = @fiber
-  end
-  #---------------------------------------------------------------------------
-  def load_fiber
-    @fiber = @saved_fiber
-    release_fiber
-  end
-  #---------------------------------------------------------------------------
-  def release_fiber
-    @saved_fiber = nil
-  end
-  #---------------------------------------------------------------------------
-  def process_compare_break(stage)
-    @current_line_number = 0
-    @draw_break = true
-    @showed_group = {}
-    Fiber.yield
+    p 'cuf'
+    @current_feature = {}
+    compare_diffs(:current)
   end
   #---------------------------------------------------------------------------
   def compare_diffs(stage = :diff)
-    return if line_max < 2
-    set_compare_item(Dummy) if @compare_item.nil? && stage != :current
-    en_prefix   = [FeatureDisableText, FeatureEnableText]  
-    @current_line_number = 0 unless stage == :eqset
-    last_id = nil
-    @showed_group = {}
-    @compare_quque.each do |symbol|
-      feature_id  = ComparisonTable[symbol].at(0)
-      @current_group_text = ComparisonTable[symbol].at(1) || ''
+    en_prefix   = [FeatureDisableText, FeatureEnableText]
+    ComparisonTable.each do |symbol, info|
+      feature_id  = info[0]
+      display_str = info[1]
       case symbol
       when :param;        compare_param(stage);
       when :param_rate;   compare_valued_feature(stage,feature_id, true)
@@ -643,19 +574,13 @@ class Window_EquipStatus < Window_Base
       when :equip_wtype;  compare_features_set(stage, feature_id);
       when :equip_atype;  compare_features_set(stage, feature_id);
       end
-      process_compare_break(stage) if @current_line_number >= line_max && !@draw_break
-      if EQS_Enable && stage != :eqset && feature_id == FeatureEquipSet
-        collect_equipment_set_diff(stage == :current)
-      end
-      last_id = feature_id
-      @draw_break = false
-      process_compare_break(stage) if @current_line_number >= line_max && !@draw_break
+      collect_equipment_set_diff if stage != :eqset && feature_id == FeatureEquipSet
     end # ComparisonTable.each
+
   end
   #---------------------------------------------------------------------------
   def get_cache_feature(id, method, *args, &block)
     return @feature_cache[id] if @feature_cache[id]
-    return unless @base_actor
     return (@feature_cache[id] = @base_actor.send(method, *args, &block))
   end
   #---------------------------------------------------------------------------
@@ -663,74 +588,31 @@ class Window_EquipStatus < Window_Base
     return index * 10000 + feature_id
   end
   #---------------------------------------------------------------------------
-  def push_new_comparison(stage, info)
-    push_group_info(stage, info)
-    if stage == :current || (stage == :eqset && @last_stage == :current)
-      @base_pages << info
-    else
-      @pages << info
-    end
-    @current_line_number += 1
-    if @current_line_number >= line_max
-      process_compare_break(stage)
-    end
-  end
-  #---------------------------------------------------------------------------
-  def push_group_info(stage, info)
-    str = []
-    # push equipment set name if this is a feature of that
-    str.push(sprintf(SetEquipmentText, @set_bonus_item.name)) if @set_bonus_item
-    str.push(@current_group_text)
-    ori_group = str.dup
-    str.select!{|s| !@showed_group[s]}
-
-    reserve_line = str.size
-    if @current_line_number + reserve_line > line_max
-      # Stocking with blank infos if no much space left
-      (reserve_line - 1).times do |_|
-        if stage == :current || (stage == :eqset && @last_stage == :current)
-          @base_pages.push(DummyInfo)
-        else
-          @pages.push(DummyInfo)
-        end
-      end
-      process_compare_break(stage)
-      str = ori_group
-    end
-
-    # Push group text line
-    str.select{|s| s.length > 0}.each do |s|
-      @showed_group[s] = true
-      @current_line_number += 1
-      duminfo = DummyInfo.dup; duminfo.group_text = s;
-      if stage == :current || (stage == :eqset && @last_stage == :current)
-        @base_pages.push(duminfo)
-      else
-        @pages.push(duminfo)
-      end
-    end # each group text
-  end
-  #---------------------------------------------------------------------------
-  def compare_param(stage)
-    feature_id = FeatureNormalParam
+  def compare_param(stage,feature_id = FEATURE_PARAM)
     ar = get_feature_array(feature_id)
     len = ar.size
+    feature_id = -1
     len.times do |i|
       str = get_feature_name(feature_id, i)
       # Show current actor feature status
       if stage == :current
         v = @actor.param(i)
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,[v,v],str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
         next
       # Comparison
       else
         a = @compare_item.param(i)
         b = @template_item.param(i)
         next if a - b == 0
-        base = (get_cache_feature(i, :param, i) || 0)
-        a += base
-        b += base
-        push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,b], str))
+        a += get_cache_feature(i, :param, i)
+        b += get_cache_feature(i, :param, i)
+        inf = DiffInfo.new(feature_id, i, [a,b], str)
+        
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     end
   end
@@ -744,7 +626,7 @@ class Window_EquipStatus < Window_Base
         return unless CurFeatureShow.include?(feature_id)
         v = @actor.features_sum_all(feature_id)
         return if v == 0
-        push_new_comparison(stage, DiffInfo.new(feature_id,0,[v,v],str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,0,[v,v],str)
         return
       else
         # Comparison
@@ -753,10 +635,14 @@ class Window_EquipStatus < Window_Base
         delta = (a - b)
         delta = delta.round(2) if delta.is_a?(Float)
         return if delta == 0
-        base = (get_cache_feature(feature_id, :features_sum_all, feature_id) || 0)
-        a += base
-        b += base
-        push_new_comparison(stage, DiffInfo.new(feature_id, 0, [a,b], str))
+        a += get_cache_feature(feature_id, :features_sum_all, feature_id)
+        b += get_cache_feature(feature_id, :features_sum_all, feature_id)
+        inf = DiffInfo.new(feature_id, 0, [a,b], str)
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     else
       len.times do |i|
@@ -766,7 +652,7 @@ class Window_EquipStatus < Window_Base
           return unless CurFeatureShow.include?(feature_id)
           v = @actor.features_sum(feature_id, i)
           next if v == 0
-          push_new_comparison(stage, DiffInfo.new(feature_id,i,[v,v],str))
+          (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
           next
         else
           # Comparison
@@ -775,10 +661,14 @@ class Window_EquipStatus < Window_Base
           delta = (a - b)
           delta = delta.round(2) if delta.is_a?(Float)
           next if delta == 0
-          base = (get_cache_feature(hash_feature_idx(feature_id, i), :features_sum, feature_id, i) || 0)
-          a += base
-          b += base
-          push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,b], str))
+          a += get_cache_feature(hash_feature_idx(feature_id, i), :features_sum, feature_id, i)
+          b += get_cache_feature(hash_feature_idx(feature_id, i), :features_sum, feature_id, i)
+          inf = DiffInfo.new(feature_id, i, [a,b], str)
+          if stage == :diff
+            (@difference[feature_id] ||= []) << inf
+          elsif stage == :eqset
+            (@equipset_diff[feature_id] ||= []) << inf
+          end
         end
       end # len.times
     end # if len ==0
@@ -793,7 +683,7 @@ class Window_EquipStatus < Window_Base
         return unless CurFeatureShow.include?(feature_id)
         v = @actor.features_pi(feature_id, i)
         next if v == 1.0
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,[v,v],str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
         next
       else
         # Comparison
@@ -802,11 +692,14 @@ class Window_EquipStatus < Window_Base
         delta = (a - b)
         delta = delta.round(2) if delta.is_a?(Float)
         next if delta == 0
-        base = get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
-        base = 1 if base.nil?
-        a *= base
-        b *= base
-        push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,b], str))
+        a *= get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
+        b *= get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
+        inf = DiffInfo.new(feature_id, i, [a,b], str)
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     end
   end
@@ -818,7 +711,7 @@ class Window_EquipStatus < Window_Base
       feats = @actor.features_set(feature_id)
       feats.each do |i|
         str = sprintf(prefix[1], get_feature_name(feature_id, i))
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,true,str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,true,str)
       end
       return
     else
@@ -831,14 +724,18 @@ class Window_EquipStatus < Window_Base
         str = sprintf(prefix[1], get_feature_name(feature_id, id))
         diffs << DiffInfo.new(feature_id, id,  true, str)
       end
-      
+
       before.select{|id| !after.include?(id)}.each do |id|
         str = sprintf(prefix[0], get_feature_name(feature_id, id))
         diffs << DiffInfo.new(feature_id, id, false, str)
       end
 
-      diffs.each do |info|
-        push_new_comparison(stage, info)
+      diffs.each do |diff|
+        if stage == :diff
+          (@difference[feature_id] ||= []) << diff
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << diff
+        end
       end
 
     end
@@ -858,7 +755,7 @@ class Window_EquipStatus < Window_Base
           v = @actor.features_sum(feature_id, i)
           next if v == 0
         end
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,[v,v],str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
       end # each feat
       return
     else
@@ -877,11 +774,15 @@ class Window_EquipStatus < Window_Base
           method_symbol = :features_sum
         end
         next if a - b == 0
-        base = (get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id) || 0)
-        a += base
-        b += base
+        a += get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id)
+        b += get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id)
         str = get_feature_name(feature_id, id)
-        push_new_comparison(stage, DiffInfo.new(feature_id, id, [a,b], str))
+        inf = DiffInfo.new(feature_id, id, [a,b], str)
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     end
   end
@@ -892,8 +793,8 @@ class Window_EquipStatus < Window_Base
       return unless CurFeatureShow.include?(feature_id)
       ar = @actor.action_plus_set.sort{|a,b| b <=> a}
       ar.each_with_index do |v,i|
-        str = sprintf(get_feature_name(feature_id), i+1)
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,[v,v],str))
+        str = sprintf(get_feature_name(feature_id), i)
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,[v,v],str)
       end
       return
     else
@@ -905,8 +806,13 @@ class Window_EquipStatus < Window_Base
       n.times do |i|
         a = (after[i]  || 0)
         b = (before[i] || 0)
-        str = sprintf(get_feature_name(feature_id), i+1)
-        push_new_comparison(stage, DiffInfo.new(feature_id, 0, [a,b], str))
+        str = sprintf(get_feature_name(feature_id), i)
+        inf = DiffInfo.new(feature_id, 0, [a,b], str)
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     end
   end
@@ -920,7 +826,7 @@ class Window_EquipStatus < Window_Base
         en = @actor.special_flag(i)
         next unless en
         str = sprintf(prefix[1], str)
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,true,str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,true,str)
         next
       else
         # Comparison
@@ -929,7 +835,12 @@ class Window_EquipStatus < Window_Base
         next if before == after
         enabled = after ? 1 : 0
         str = sprintf(prefix[enabled], str)
-        push_new_comparison(stage, DiffInfo.new(feature_id, i, after, str))
+        inf = DiffInfo.new(feature_id, i, after, str)
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     end
   end
@@ -938,12 +849,12 @@ class Window_EquipStatus < Window_Base
     ar = PartyAbilityName
     ar.each do |i, str|
       # Show current actor feature status
-      if stage == :current
+      if stage
         return unless CurFeatureShow.include?(feature_id)
         en = @actor.party_ability(i)
         next unless en
         str = sprintf(prefix[1], str)
-        push_new_comparison(stage, DiffInfo.new(feature_id,i,true,str))
+        (@current_feature[feature_id] ||= []) << DiffInfo.new(feature_id,i,true,str)
         next
       else
         # Comparison
@@ -952,7 +863,12 @@ class Window_EquipStatus < Window_Base
         next if before == after
         enabled = after ? 1 : 0
         str = sprintf(prefix[enabled], str)
-        push_new_comparison(stage, DiffInfo.new(feature_id, i, after, str))
+        inf = DiffInfo.new(feature_id, i, after, str)
+        if stage == :diff
+          (@difference[feature_id] ||= []) << inf
+        elsif stage == :eqset
+          (@equipset_diff[feature_id] ||= []) << inf
+        end
       end
     end
   end
@@ -963,45 +879,37 @@ class Window_EquipStatus < Window_Base
     @actor ? Vocab::etype(@actor.equip_slots[index]) : ""
   end
   #---------------------------------------------------------------------------
-  def get_group_text(feature_id)
-    return StringTable[feature_id]
-  end
-  #---------------------------------------------------------------------------
   def get_feature_name(feature_id, index = nil)
-    name = ''
     case feature_id
-    when FeatureNormalParam;    name = Vocab.param(index);
-    when FEATURE_ATK_ELEMENT;   name = $data_system.elements[index];
-    when FEATURE_ELEMENT_RATE;  name = $data_system.elements[index];
-    when FEATURE_PARAM;         name = Vocab.param(index);
-    when FEATURE_XPARAM;        name = XParamName[index];
-    when FEATURE_SPARAM;        name = SParamName[index];
-    when FEATURE_SKILL_ADD;     name = ($data_skills[index].name rescue '');
-    when FEATURE_SKILL_SEAL;    name = ($data_skills[index].name rescue '');
-    when FEATURE_STATE_RATE;    name = ($data_states[index].name rescue '');
-    when FEATURE_STATE_RESIST;  name = ($data_states[index].name rescue '');
-    when FEATURE_ATK_STATE;     name = ($data_states[index].name rescue '');
-    when FEATURE_EQUIP_WTYPE;   name = $data_system.weapon_types[index];
-    when FEATURE_EQUIP_ATYPE;   name = $data_system.armor_types[index];
-    when FEATURE_STYPE_ADD;     name = $data_system.skill_types[index];
-    when FEATURE_STYPE_SEAL;    name = $data_system.skill_types[index];
-    when FEATURE_PARTY_ABILITY; name = PartyAbilityName[index];
-    when FEATURE_SPECIAL_FLAG;  name = SpecialFeatureName[index];
-    when FEATURE_EQUIP_FIX;     name = slot_name(index);
-    when FEATURE_EQUIP_SEAL;    name = slot_name(index);
+    when FEATURE_ATK_ELEMENT;   return $data_system.elements[index];
+    when FEATURE_ELEMENT_RATE;  return $data_system.elements[index];
+    when FEATURE_PARAM;         return Vocab.param(index);
+    when FEATURE_XPARAM;        return XParamName[index];
+    when FEATURE_SPARAM;        return SParamName[index];
+    when FEATURE_SKILL_ADD;     return $data_skills[index].name;
+    when FEATURE_SKILL_SEAL;    return $data_skills[index].name;
+    when FEATURE_STATE_RATE;    return $data_states[index].name;
+    when FEATURE_STATE_RESIST;  return $data_states[index].name;
+    when FEATURE_ATK_STATE;     return $data_states[index].name;
+    when FEATURE_EQUIP_WTYPE;   return $data_system.weapon_types[index];
+    when FEATURE_EQUIP_ATYPE;   return $data_system.armor_types[index];
+    when FEATURE_STYPE_ADD;     return $data_system.skill_types[index];
+    when FEATURE_STYPE_SEAL;    return $data_system.skill_types[index];
+    when FEATURE_PARTY_ABILITY; return PartyAbilityName[index];
+    when FEATURE_SPECIAL_FLAG;  return SpecialFeatureName[index];
+    when FEATURE_EQUIP_FIX;     return slot_name(index);
+    when FEATURE_EQUIP_SEAL;    return slot_name(index);
     else
       return OtherFeatureName[feature_id] || ""
     end
-    return name  || ''
   end
   #---------------------------------------------------------------------------
   def get_feature_array(feature_id)
     case feature_id
-    when FeatureNormalParam;    return Array.new($data_system.terms.params.size);
     when FEATURE_ATK_ELEMENT;   return $data_system.elements;
     when FEATURE_ELEMENT_RATE;  return $data_system.elements;
-    when FEATURE_PARAM;         return Array.new($data_system.terms.params.size);
-    when FEATURE_XPARAM;        return Array.new(XParamName.size);
+    when FEATURE_PARAM;         return Array.new($data_system.terms.params.size, 0);
+    when FEATURE_XPARAM;        return Array.new(XParamName.size, 0);
     when FEATURE_SPARAM;        return Array.new(SParamName.size);
     when FEATURE_SKILL_ADD;     return $data_skills;
     when FEATURE_SKILL_SEAL;    return $data_skills;
@@ -1022,53 +930,32 @@ class Window_EquipStatus < Window_Base
   end
   #---------------------------------------------------------------------------
   def draw_current_feature
-    resume_comparison
     draw_compare_result(true)
   end
   #---------------------------------------------------------------------------
-  def draw_page(cur_feat, index)
-    head = index * line_max
-    rear = (index + 1) * line_max - 1
-    # the lines for current page
-    list = cur_feat ? @base_pages[head..[@base_pages.size-1, rear].min] : @pages[head..[@pages.size, rear].min]
-    return if list.nil?
-    contents.clear
-    last_display_group = ''
-    @comparing = !cur_feat
-
-    dy = 0
-    list.each_with_index do |info, i|
-      feature_id = info.feature_id
-      if (info.group_text || '').length > 0
-        if EQS_Enable && info.group_text.match(SetEquipmentTextStem)
-          draw_equipset_title(@dx, dy, info.group_text || '')
-          dy += line_height
-        elsif last_display_group != info.group_text
-          last_display_group = info.group_text
-          rect = Rect.new(@dx, dy, @ori_contents_width, line_height)
-          draw_text(rect, info.group_text)
-          dy += line_height
-        end
-      end
-      next if info.feature_id.nil?
-      draw_item(@dx, dy, info)
-      dy += line_height
-    end
-  end
-  #---------------------------------------------------------------------------
   def draw_compare_result(cur_feat = false)
-    resume_comparison
-    update_arrows(cur_feat ? @base_pages : @pages)
-    draw_page(cur_feat, 0)
-  end
-  #---------------------------------------------------------------------------
-  # * Draw the name of equipment set
-  #---------------------------------------------------------------------------
-  def draw_equipset_title(dx, dy, str)
-    return if str.length == 0
-    change_color(crisis_color)
-    draw_text(dx, dy, @ori_contents_width, line_height, str)
-    change_color(normal_color)
+    counter = 0
+    list = cur_feat ? @current_feature : @difference
+    diff = list.sort_by{|k, dar|
+      DisplayOrder[StringTable[dar.first.feature_id]] ? DisplayOrder[StringTable[dar.first.feature_id]] : DisplayOrder[MISC_text]
+    }.collect{|p| p[1]}
+    last_display_group = ''
+    diff.each do |infos|
+      feature_id = infos.first.feature_id
+      group_text = StringTable[feature_id]
+      if last_display_group != group_text && group_text.length > 0
+        last_display_group = group_text
+        rect = Rect.new(0, counter * line_height, contents_width, line_height)
+        draw_text(rect, group_text)
+        counter += 1
+      end
+      infos.each do |info|
+        dy = counter * line_height
+        break if dy > @bottom_oy + 1
+        draw_item(0, dy, info)
+        counter += 1
+      end
+    end
   end
   #---------------------------------------------------------------------------
   # * Overwrite: draw_item
@@ -1095,22 +982,21 @@ class Window_EquipStatus < Window_Base
 
       # draw skill change with the icon
       if [FEATURE_SKILL_ADD, FEATURE_SKILL_SEAL].include?(info.feature_id)
-        draw_skill_change(dx + 2, dy, info)
+        info.value ^= true;
+        draw_skill_change(dx + 8, dy, info)
       else
-        draw_info_change(dx, dy, info.display_str)
+        draw_info_change(dx + 8, dy, info.display_str)
       end
       change_color(normal_color)
     else
       draw_info_name(dx + 4, dy, info.display_str)
-      draw_info_diff(dx, dy, info.value, PercentageFeaure.include?(info.feature_id))
+      draw_info_diff(dx + 8, dy, info.value, PercentageFeaure.include?(info.feature_id))
     end
     reset_font_settings if $imported["YEA-AceEquipEngine"]
   end
   #---------------------------------------------------------------------------
-  # * Draw add/remove/enable/disable text
-  #---------------------------------------------------------------------------
   def draw_info_change(dx, dy, str)
-    rect = Rect.new(dx, dy, @ori_contents_width-4, line_height)
+    rect = Rect.new(0, dy, contents.width-4, line_height)
     draw_text(rect, str, 2)
   end
   #---------------------------------------------------------------------------
@@ -1118,7 +1004,7 @@ class Window_EquipStatus < Window_Base
     str = info.display_str
     return draw_info_change(dx, dy, str) unless (info.data_id || 0) > 0
     text_width = self.contents.text_size(str).width
-    dx = dx + @ori_contents_width - text_width - 34
+    dx = contents.width - text_width - 34
     prefix = str[0]; str = str[1...str.length];
     rect = Rect.new(dx, dy, self.contents.text_size(prefix).width + 3, line_height)
     draw_text(rect, prefix)
@@ -1130,17 +1016,17 @@ class Window_EquipStatus < Window_Base
   #---------------------------------------------------------------------------
   def draw_info_name(dx, dy, str)
     change_color(system_color)
-    draw_text(dx, dy, @ori_contents_width, line_height, str)
+    draw_text(dx, dy, contents.width, line_height, str)
     change_color(normal_color)
   end
   #---------------------------------------------------------------------------
   def draw_info_diff(dx, dy, value, is_percent = false)
-    dw = (@ori_contents_width + 22) / 2
-    crect = Rect.new(dx, dy, dw, line_height)
-    nrect = Rect.new(dx, dy, @ori_contents_width - 8, line_height)
-    drx = dx + (@ori_contents_width + 22) / 2
-    draw_diff_value(crect, value[1], is_percent) if @comparing
-    draw_right_arrow(drx, dy)                    if @comparing
+    dw = (contents.width + 22) / 2
+    crect = Rect.new(0, dy, dw, line_height)
+    nrect = Rect.new(0, dy, contents.width-4, line_height)
+    drx = (contents.width + 22) / 2
+    draw_diff_value(crect, value[1], is_percent)
+    draw_right_arrow(drx, dy)
     change_color(param_change_color(value[0] - value[1]))
     draw_diff_value(nrect, value[0], is_percent)
     change_color(normal_color)
@@ -1151,63 +1037,83 @@ class Window_EquipStatus < Window_Base
     str = sprintf("%s\%", (value * 100).to_i) if is_percent
     draw_text(rect, str, 2)
   end
-  #--------------------------------------------------------------------------
-  def draw_background_colour(dx, dy)
-    colour = Color.new(0, 0, 0, translucent_alpha/2)
-    rect = Rect.new(dx+1, dy+1, @ori_contents_width - 2, line_height - 2)
-    contents.fill_rect(rect, colour)
-  end
-  #--------------------------------------------------------------------------
 #-#
   #---------------------------------------------------------------------------
   # * Compare the equipment set bonus, written by Modern Algebra
   #---------------------------------------------------------------------------
 if $imported[:MA_EquipmentSetBonuses]
   #---------------------------------------------------------------------------
-  # * Collect equipment set difference, current_only: collect currently
-  #   activated equipment set.
-  def collect_equipment_set_diff(current_only = false)
-    return unless @actor
+  def collect_equipment_set_diff
+    return unless @actor && @temp_actor
     before = @actor.maesb_sets || []
+    after  = @temp_actor.maesb_sets || []
+    return if before.size + after.size == 0
     feature_id = FeatureEquipSet
-    return if current_only && before.size == 0
-    btmp_item = @template_item ? @template_item.dup : nil
-    @last_stage = current_only ? :current : :diff
-    if current_only
-      start_index = @base_pages.size
-      bcmp_item = @compare_item ? @compare_item.dup : nil
-      @template_item = Dummy
-      before.each do |obj|
-        @compare_item = obj
-        @set_bonus_item = obj
-        compare_diffs(:eqset)
-      end
-    else
-      return unless @temp_actor
-      after  = @temp_actor.maesb_sets || []
-      bcmp_item = @compare_item ? @compare_item.dup : nil
-      start_index = @pages.size
-      @template_item = Dummy
-      after.select{|obj| !before.include?(obj)}.each do |obj|
-        @compare_item = obj
-        @set_bonus_item = obj
-        compare_diffs(:eqset)
-      end
-      @compare_item = Dummy
-      before.select{|obj| !after.include?(obj)}.each do |obj|
-        @pages << DummyInfo
-        @template_item = obj
-        @set_bonus_item = obj
-        compare_diffs(:eqset)
-      end
+
+    btmp_item = @temp_item    ? @temp_item.dup : nil
+    bcmp_item = @compare_item ? @compare_item.dup : nil
+
+    after.select{|obj| !before.include?(obj)}.each do |obj|
+      @temp_item = Dummy
+      @compare_item = obj
+      compare_diff(:equipset)
     end
-    @last_stage = nil
-    @set_bonus_item = nil
-    @template_item = btmp_item
-    @compare_item = bcmp_item
+
+    before.select{|obj| !after.include?(obj)}.each do |obj|
+      @temp_item = obj
+      @compare_item = Dummy
+      compare_diff(:equipset)
+    end
+    
   end
 end
   #---------------------------------------------------------------------------
 #-#
 end # class Window_EQ status
 end # enable
+
+=begin
+  # backup method of another version of 'def compare_diff'
+    ComparisonTable.each do |symbol, info|
+      feature_id  = info[0]
+      display_str = info[1]
+      method_symbol = :pass # do nothing
+      args          = []
+      case symbol
+      when :atk_speed;    method_symbol = :compare_features_sum;
+      when :atk_times;    method_symbol = :compare_features_sum;
+      when :action_plus;  method_symbol = :compare_action_plus;
+      when :special_flag; method_symbol = :compare_special_flag;
+      when :party_ability;method_symbol = :compare_party_ability;
+      when :xparam;       method_symbol = :compare_features_sum;
+      when :sparam;       method_symbol = :compare_features_pi;
+      when :skill_add;    method_symbol = :compare_features_set;
+      when :skill_seal;   method_symbol = :compare_features_set;
+      when :element_rate; method_symbol = :compare_features_pi;
+      when :atk_element;  method_symbol = :compare_features_set;
+      when :state_resist;  method_symbol = :compare_features_set;
+      when :param
+        method_symbol = :compare_param
+        feature_id    = -1
+      when :param_rate
+        method_symbol = :compare_valued_feature
+        args = [true]
+      when :atk_state
+        method_symbol = :compare_valued_feature
+        args = [false]
+      when :state_rate
+        method_symbol = :compare_valued_feature
+        args = [true]
+      when :stype_seal
+        method_symbol = :compare_features_set;
+        args = [en_prefix.reverse]
+      when :stype_add
+        method_symbol = :compare_features_set;
+        args = [en_prefix]
+      when :equip_fix
+        method_symbol = :compare_features_set
+        args = [en_prefix.reverse]
+      end
+      self.method(method_symbol).call(stage, feature_id, *args)
+    end # ComparisonTable.each
+=end
