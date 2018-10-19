@@ -10,17 +10,23 @@ $imported["COMP_EECI"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
-# -- 2018.10.21: First release                                                #
+# -- 2018.10.19: Script completed                                             #
+# -- 2018.10.16: Received commission and started                              #
 #                                                                             #
 #=============================================================================#
 #                       ** End-User License Agreement **                      #
 #-----------------------------------------------------------------------------#
+# ┌─────────────────────────────────────────────────────────────────────────┐ #
+# │         ** THIS IS A PAID SCRIPT, RE-DISTRIBUTE WITH CAUTION! **        │ #
+# └─────────────────────────────────────────────────────────────────────────┘ #
 #  1. Copyright and Redistribution:                                           #
 #       All codes were written by me(Compeador), and you(the user) may edit   #
 #  the code for your own need without permission (duh).                       #
 #  Redistribute this script must agreed by VaiJack8, who commissioned this    #
 #  script, and you must share the original version released by the author     #
-#  without edits.                                                             #
+#  without edits with credits.                                                #
+#   If you edited the scripts and claimed it as your own, this will resulted  #
+#  in copywrite law violation and also proves you're an a$$hole.              #
 #                                                                             #
 # 2. Service Information:                                                     #
 #       I only responsible for the edits requested by VaiJack8(the client).   #
@@ -36,17 +42,32 @@ $imported["COMP_EECI"] = true
 # in Equip Scene when changing the equipments, instead of showing default     #
 # paramters, this script will only show changed parameters, including crit.   #
 # evasion...etc.                                                              #
+#   Most of editable option is in the module below, read the comments to know #
+# what's it doing and how to adjust them for your needs.                      #
 #=============================================================================#
 #                            ** Compatibility **                              #
 #-----------------------------------------------------------------------------#
-#   > Compatible with YEA Equip Engine                                        #
+#   > YEA Equip Engine is required                                            #
 #   > Support comparison with 'Equipment Set Bonuses' by Modern Algebra       #
 #                                                                             #
 #       ** Place this script below the scripts mentioned above **             #
+#                                                                             #
+#   This script 99% will working if and only if in RPG Maker VX Ace. Also,    #
+# this is only sutiable for the project uses default RM's parameters/features #
+# that can be seen in database. On the other words, if you have tons of       #
+# custom parameter and other features, this script may not works well.        #
 #=============================================================================#
 
 # Enable this script?
 COMP_EECI_Enable = true
+
+if COMP_EECI_Enable && !$imported["YEA-AceEquipEngine"]
+  info = "Yanfly's Equip Engine is not detected, please make sure the script\n" +
+         "is placed correctly.\n" +
+         "The Equipment Extend Comparison Information will be disabled."
+  msgbox(info)
+  COMP_EECI_Enable = false
+end
 
 if COMP_EECI_Enable
 #=============================================================================
@@ -93,15 +114,37 @@ module COMP
     # *                     v Free to Edit v                              #
     #=====================================================================#
     # * The next/last page keybind, edit the value for your own need.
-    #=====================================================================
-    Key_nextpage  = :RIGHT
-    Key_lastpage  = :LEFT
+    #---------------------------------------------------------------------
+    Key_nextpage   = :RIGHT
+    Key_lastpage   = :LEFT
+    #---------------------------------------------------------------------
+    # * Hide the hint if no need to turn pages
+    Auto_Hide = true 
+    #---------------------------------------------------------------------
+    # * After how many second to hide the hint after hint is shown? 
+    #   0 = never
+    AutoHideTimer = 5 * Graphics.frame_rate
+    #---------------------------------------------------------------------
+    # * The hint window that display text about turning pages, uses 
+    #   ""(double quote) if you don't want to show hint
+    Hint_Text     = "Use L/R to turn status pages"
+
+    Hint_Position = :BR_actor_status          # at bottom-right of actor status window
+    #               :BR_equip_status          # at bottom-right of equipment status window
+    #               [x_position, y_position]  # Custom window position
+
+    #                           R ,  G ,  B , Opacity
+    Hint_BackColor = Color.new(  0,   0,   0, 150)    # Back color of sprite
+    Hint_TextColor = Color.new(255, 255, 255, 255)    # Text color
+    Hint_Fontsize  = 20                       # Font size
+    Hint_Opacity   = 255                      # Opacity of sprite
+    Hint_Canva     = [300, 24]                # Max Width/Height of canvas
     #---------------------------------------------------------------------
     # * Text displayed when showing the comparison of set equipment bonus
     SetEquipmentTextStem = "Set bonus"
-    SetEquipmentText = SetEquipmentTextStem + " [%s]:"
+    SetEquipmentText = SetEquipmentTextStem + " [%s]:" # don't edit this
     #---------------------------------------------------------------------
-    # * Id for standard param
+    # * Id for standard param, chances are no need to edits
     FeatureNormalParam = -1
     #---------------------------------------------------------------------
     # * The param/feature considered to compare
@@ -131,12 +174,14 @@ module COMP
       :equip_atype    => [FEATURE_EQUIP_ATYPE, 'Equip Armor'],      # Equip Armor
       :equip_fix      => [FEATURE_EQUIP_FIX, 'Lock Equip'],         # Lock Equip
       :equip_seal     => [FEATURE_EQUIP_SEAL, 'Seal Equip'],        # Seal Equip
-      :slot_type      => [FEATURE_SLOT_TYPE, 'Slot Type'],          # Slot Type
       :action_plus    => [FEATURE_ACTION_PLUS, 'Action Times+'],    # Action Times+
       :party_ability  => [FEATURE_PARTY_ABILITY, 'Party ability'],  # Party ability
+
+      # kinda useless, so I didn't implement it.
+      # :slot_type      => [FEATURE_SLOT_TYPE, 'Slot Type'],          # Slot Type
     }
     #---------------------------------------------------------------------
-    # * Id for equipment set
+    # * Id for equipment set, perhaps not necessary to change
     FeatureEquipSet = -2
     #---------------------------------------------------------------------
     # * Compare with MA's equipment set diff
@@ -236,7 +281,10 @@ module COMP
     FeatureDisableText = "X" + " %s"
     #---------------------------------------------------------------------
     # * The feature id that is actually not good
-    InverseColorFeature = [FEATURE_STYPE_SEAL, FEATURE_SKILL_SEAL]
+    InverseColorFeature = [
+      FEATURE_STYPE_SEAL, FEATURE_SKILL_SEAL, FEATURE_EQUIP_FIX,
+      FEATURE_EQUIP_SEAL,
+    ]
     #---------------------------------------------------------------------
     # * The value of given feature id will disaply as percent
     PercentageFeaure = [
@@ -358,7 +406,43 @@ class RPG::EquipItem < RPG::BaseItem
   end
   #---------------------------------------------------------------------------
 end
-
+#==============================================================================
+# ** Sprite
+#==============================================================================
+class Sprite
+  #---------------------------------------------------------------------------
+  def show
+    self.visible = true
+    self
+  end
+  #---------------------------------------------------------------------------
+  def hide
+    self.visible = false
+    self
+  end
+  #---------------------------------------------------------------------------
+  def visible?
+    return self.visible
+  end
+  #---------------------------------------------------------------------------
+end
+#==============================================================================
+# ** Window_Base
+#==============================================================================
+class Window_Base < Window
+  #---------------------------------------------------------------------------
+  def active?
+    return self.active
+  end
+  #---------------------------------------------------------------------------
+  def visible?
+    return self.visible
+  end
+  #---------------------------------------------------------------------------
+end
+#==============================================================================
+# ** Module of this script
+#==============================================================================
 module COMP::EECI
   #--------------------------------------------------------------------------
   # * Dummy equipment for which compare side is nil
@@ -370,6 +454,37 @@ end
 #==============================================================================
 class Scene_Equip < Scene_MenuBase
   #--------------------------------------------------------------------------
+  Hint_Text      = COMP::EECI::Hint_Text
+  Hint_Canva     = COMP::EECI::Hint_Canva
+  Hint_Position  = COMP::EECI::Hint_Position
+  Hint_BackColor = COMP::EECI::Hint_BackColor
+  Hint_Fontsize  = COMP::EECI::Hint_Fontsize
+  Hint_Opacity   = COMP::EECI::Hint_Opacity
+  Hint_TextColor = COMP::EECI::Hint_TextColor
+  #--------------------------------------------------------------------------
+  # * alias: start
+  #--------------------------------------------------------------------------
+  alias start_eeci start
+  def start
+    start_eeci
+    create_eeci_hint_window
+  end
+  #--------------------------------------------------------------------------
+  alias update_eeci update
+  def update
+    update_autohide_timer if @eeci_hint_timer
+    update_eeci
+  end
+  #--------------------------------------------------------------------------
+  def update_autohide_timer
+    return unless COMP::EECI::Auto_Hide
+    return if COMP::EECI::AutoHideTimer == 0
+    return if @eeci_hint_timer < 0
+    return unless @hint_sprite.visible?
+    @eeci_hint_timer -= 1 if @eeci_hint_timer >= 0
+    update_eeci_hint_visibility if @eeci_hint_timer < 0
+  end
+  #--------------------------------------------------------------------------
   # * alias: slot [OK]
   #--------------------------------------------------------------------------
   alias on_slot_ok_eeci on_slot_ok
@@ -378,6 +493,74 @@ class Scene_Equip < Scene_MenuBase
     item = COMP::EECI::Dummy if item.nil?
     @status_window.set_template_item(item)
     on_slot_ok_eeci
+  end
+  #--------------------------------------------------------------------------
+  def create_eeci_hint_window
+    return if Hint_Text.length == 0
+
+    @eeci_hint_timer = nil
+    @hint_sprite = ::Sprite.new(@viewport)
+    bw, bh = *Hint_Canva
+
+    temp_bmp = Bitmap.new(bw,bh)
+    temp_bmp.font.size = Hint_Fontsize
+    bw = [temp_bmp.text_size(Hint_Text).width + 4, bw].min
+    temp_bmp.dispose; temp_bmp = nil;
+
+    @hint_sprite.bitmap = Bitmap.new(bw, bh)
+    sx, sy = 0, 0
+    if Hint_Position.is_a?(Array)
+      sx, sy = *Hint_Position
+    elsif Hint_Position == :BR_actor_status
+      sx = @actor_window.x + @actor_window.width  - bw
+      sy = @actor_window.y + @actor_window.height - bh
+    elsif Hint_Position == :BR_equip_status
+      sx = @status_window.x + @status_window.width - bw
+      sy = @status_window.y + @status_window.height - bh
+    end
+    @hint_sprite.x, @hint_sprite.y = sx, sy;
+    @hint_sprite.opacity = Hint_Opacity
+
+    @hint_sprite.bitmap.font.size = Hint_Fontsize
+    @hint_sprite.bitmap.font.color.set(Hint_TextColor)
+    @hint_sprite.bitmap.fill_rect(0, 0, bw, bh, Hint_BackColor)
+    @hint_sprite.bitmap.draw_text(2, 0, bw, bh, Hint_Text)
+    @hint_sprite.z = @viewport.z
+    
+    update_eeci_hint_visibility
+  end
+  #--------------------------------------------------------------------------
+  def update_eeci_hint_visibility
+    return unless @hint_sprite
+    return @hint_sprite.show if !COMP::EECI::Auto_Hide
+    return @hint_sprite.hide if @eeci_hint_timer && @eeci_hint_timer < 0
+
+    if @status_window.nil? || @item_window.nil? || !@status_window.visible?
+      @hint_sprite.hide
+      return
+    end
+    
+    if @item_window.active?
+      if @status_window.pages.size > @status_window.line_max
+        @hint_sprite.show
+        @eeci_hint_timer = COMP::EECI::AutoHideTimer unless @eeci_hint_timer
+      else
+        @hint_sprite.hide
+      end
+    else
+      if @status_window.base_pages.size > @status_window.line_max
+        @hint_sprite.show
+        @eeci_hint_timer = COMP::EECI::AutoHideTimer unless @eeci_hint_timer
+      else
+        @hint_sprite.hide
+      end
+    end
+  end
+  #--------------------------------------------------------------------------
+  alias :terminate_eeci :terminate
+  def terminate
+    @hint_sprite.dispose if @hint_sprite
+    terminate_eeci
   end
 end
 #==============================================================================
@@ -425,7 +608,7 @@ class Window_EquipStatus < Window_Base
   #---------------------------------------------------------------------------
   alias init_eeci initialize
   def initialize(*args)
-    @line_max       = 0     # Cache max line for faster query
+    @line_max       = nil   # Cache max line for faster query
     @feature_cache  = {}    # Cache feature value for faster query
     @pages          = []    # Comparison result array
     @base_pages     = []    # Actor current status array
@@ -471,22 +654,31 @@ class Window_EquipStatus < Window_Base
   # * update page next/last
   #---------------------------------------------------------------------------
   def update_page
-    current_pages = @temp_actor.nil? ? @base_pages : @pages
     if Input.trigger?(Key_nextpage)
-      next_page = @page_index + 1
-      resume_comparison if current_pages[next_page * line_max].nil? && !compare_over?
-      if current_pages[next_page * line_max]
-        # pre-compare next page if coroutine is still running
-        resume_comparison unless compare_over?
-        @page_index = next_page
-        update_arrows(current_pages)
-        draw_page(@temp_actor.nil?, @page_index)
-      end
+      next_page
     elsif Input.trigger?(Key_lastpage) && @page_index > 0
-      @page_index -= 1
+      last_page
+    end
+  end
+  #---------------------------------------------------------------------------
+  def next_page
+    current_pages = @temp_actor.nil? ? @base_pages : @pages
+    next_page = @page_index + 1
+    resume_comparison if current_pages[next_page * line_max].nil? && !compare_over?
+    if current_pages[next_page * line_max]
+      # pre-compare next page if coroutine is still running
+      resume_comparison unless compare_over?
+      @page_index = next_page
       update_arrows(current_pages)
       draw_page(@temp_actor.nil?, @page_index)
     end
+  end
+  #---------------------------------------------------------------------------
+  def last_page
+    current_pages = @temp_actor.nil? ? @base_pages : @pages
+    @page_index -= 1
+    update_arrows(current_pages)
+    draw_page(@temp_actor.nil?, @page_index)
   end
   #---------------------------------------------------------------------------
   def contents_width
@@ -523,6 +715,7 @@ class Window_EquipStatus < Window_Base
     rescue FiberError => e
       @fiber = nil
     end
+    SceneManager.scene.update_eeci_hint_visibility
   end
   #---------------------------------------------------------------------------
   def set_template_item(item)
@@ -563,6 +756,7 @@ class Window_EquipStatus < Window_Base
     stage = (@temp_actor) ? :diff : :current
     resume_comparison
     draw_compare_result(stage == :current)
+    SceneManager.scene.update_eeci_hint_visibility
   end
   #---------------------------------------------------------------------------
   def collect_current_feature
@@ -683,8 +877,10 @@ class Window_EquipStatus < Window_Base
     str.push(@current_group_text)
     ori_group = str.dup
     str.select!{|s| !@showed_group[s]}
+    str.select!{|s| s.length > 0}
 
-    reserve_line = str.size
+    reserve_line  = str.size
+    reserve_line += 2 if str.size > 0
     if @current_line_number + reserve_line > line_max
       # Stocking with blank infos if no much space left
       (reserve_line - 1).times do |_|
@@ -699,7 +895,7 @@ class Window_EquipStatus < Window_Base
     end
 
     # Push group text line
-    str.select{|s| s.length > 0}.each do |s|
+    str.each do |s|
       @showed_group[s] = true
       @current_line_number += 1
       duminfo = DummyInfo.dup; duminfo.group_text = s;
@@ -877,9 +1073,16 @@ class Window_EquipStatus < Window_Base
           method_symbol = :features_sum
         end
         next if a - b == 0
-        base = (get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id) || 0)
-        a += base
-        b += base
+        if pi
+          base = get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id)
+          base = 1 if base.nil?
+          a *= base
+          b *= base
+        else
+          base = (get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id) || 0)
+          a += base
+          b += base
+        end
         str = get_feature_name(feature_id, id)
         push_new_comparison(stage, DiffInfo.new(feature_id, id, [a,b], str))
       end
@@ -1160,7 +1363,7 @@ class Window_EquipStatus < Window_Base
   #--------------------------------------------------------------------------
 #-#
   #---------------------------------------------------------------------------
-  # * Compare the equipment set bonus, written by Modern Algebra
+  # * Compare the equipment set bonus
   #---------------------------------------------------------------------------
 if $imported[:MA_EquipmentSetBonuses]
   #---------------------------------------------------------------------------
