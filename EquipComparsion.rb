@@ -818,6 +818,7 @@ class Window_EquipStatus < Window_Base
       when :param_rate;   compare_valued_feature(stage,feature_id, true)
       when :xparam;       compare_features_sum(stage,feature_id);
       when :sparam;       compare_features_pi(stage,feature_id);
+      when :debuff_rate;  compare_valued_feature(stage, feature_id, true);
       when :skill_add;    compare_features_set(stage,feature_id);
       when :skill_seal;   compare_features_set(stage,feature_id, en_prefix.reverse);
       when :element_rate; compare_features_pi(stage,feature_id);
@@ -859,6 +860,7 @@ class Window_EquipStatus < Window_Base
   #---------------------------------------------------------------------------
   def push_new_comparison(stage, info)
     push_group_info(stage, info)
+    
     if stage == :current || (stage == :eqset && @last_stage == :current)
       @base_pages << info
     else
@@ -876,14 +878,15 @@ class Window_EquipStatus < Window_Base
     str.push(sprintf(SetEquipmentText, @set_bonus_item.name)) if @set_bonus_item
     str.push(@current_group_text)
     ori_group = str.dup
-    str.select!{|s| !@showed_group[s]}
     str.select!{|s| s.length > 0}
+    str.select!{|s| !@showed_group[s]}
 
     reserve_line  = str.size
     reserve_line += 2 if str.size > 0
+
     if @current_line_number + reserve_line > line_max
       # Stocking with blank infos if no much space left
-      (reserve_line - 1).times do |_|
+      (line_max - @current_line_number).times do |_|
         if stage == :current || (stage == :eqset && @last_stage == :current)
           @base_pages.push(DummyInfo)
         else
@@ -1173,6 +1176,7 @@ class Window_EquipStatus < Window_Base
   def get_feature_name(feature_id, index = nil)
     name = ''
     case feature_id
+    when FEATURE_DEBUFF_RATE;   name = Vocab.param(index);
     when FeatureNormalParam;    name = Vocab.param(index);
     when FEATURE_ATK_ELEMENT;   name = $data_system.elements[index];
     when FEATURE_ELEMENT_RATE;  name = $data_system.elements[index];
@@ -1204,6 +1208,7 @@ class Window_EquipStatus < Window_Base
     when FEATURE_ATK_ELEMENT;   return $data_system.elements;
     when FEATURE_ELEMENT_RATE;  return $data_system.elements;
     when FEATURE_PARAM;         return Array.new($data_system.terms.params.size);
+    when FEATURE_DEBUFF_RATE;   return Array.new($data_system.terms.params.size);
     when FEATURE_XPARAM;        return Array.new(XParamName.size);
     when FEATURE_SPARAM;        return Array.new(SParamName.size);
     when FEATURE_SKILL_ADD;     return $data_skills;
@@ -1338,10 +1343,10 @@ class Window_EquipStatus < Window_Base
   end
   #---------------------------------------------------------------------------
   def draw_info_diff(dx, dy, value, is_percent = false)
-    dw = (@ori_contents_width + 22) / 2
+    dw = (@ori_contents_width + 54) / 2
     crect = Rect.new(dx, dy, dw, line_height)
     nrect = Rect.new(dx, dy, @ori_contents_width - 8, line_height)
-    drx = dx + (@ori_contents_width + 22) / 2
+    drx = dx + (@ori_contents_width + 54) / 2
     draw_diff_value(crect, value[1], is_percent) if @comparing
     draw_right_arrow(drx, dy)                    if @comparing
     change_color(param_change_color(value[0] - value[1]))
@@ -1351,7 +1356,7 @@ class Window_EquipStatus < Window_Base
   #---------------------------------------------------------------------------
   def draw_diff_value(rect, value, is_percent)
     str = value.to_s
-    str = sprintf("%s\%", (value * 100).to_i) if is_percent
+    str = sprintf("%d\%", (value * 100).round(2).to_i) if is_percent
     draw_text(rect, str, 2)
   end
   #--------------------------------------------------------------------------
