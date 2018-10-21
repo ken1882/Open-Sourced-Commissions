@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Extended Equipment Comparison Info                                        #
-#   Version: 1.0.0                                                            #  
+#   Version: 1.0.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_EECI"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.10.21: Add inverse color option to value comparison                 #
 # -- 2018.10.19: Script completed                                             #
 # -- 2018.10.16: Received commission and started                              #
 #                                                                             #
@@ -283,14 +284,14 @@ module COMP
     # * The feature id that is actually not good
     InverseColorFeature = [
       FEATURE_STYPE_SEAL, FEATURE_SKILL_SEAL, FEATURE_EQUIP_FIX,
-      FEATURE_EQUIP_SEAL,
+      FEATURE_EQUIP_SEAL, FEATURE_ELEMENT_RATE,
     ]
     #---------------------------------------------------------------------
     # * The value of given feature id will disaply as percent
     PercentageFeaure = [
       FEATURE_ELEMENT_RATE, FEATURE_DEBUFF_RATE, FEATURE_STATE_RATE,
       FEATURE_PARAM, FEATURE_XPARAM, FEATURE_SPARAM, FEATURE_ATK_STATE,
-      FEATURE_ACTION_PLUS, 
+      FEATURE_ACTION_PLUS,
     ]
     #--------------------------------------------------------------------------
     # * Features that shows in status window when not comparing stuff
@@ -1310,7 +1311,7 @@ class Window_EquipStatus < Window_Base
       change_color(normal_color)
     else
       draw_info_name(dx + 4, dy, info.display_str)
-      draw_info_diff(dx, dy, info.value, PercentageFeaure.include?(info.feature_id))
+      draw_info_diff(dx, dy, info)
     end
     reset_font_settings if $imported["YEA-AceEquipEngine"]
   end
@@ -1342,14 +1343,19 @@ class Window_EquipStatus < Window_Base
     change_color(normal_color)
   end
   #---------------------------------------------------------------------------
-  def draw_info_diff(dx, dy, value, is_percent = false)
+  def draw_info_diff(dx, dy, info)
+    value = info.value
+    is_percent = PercentageFeaure.include?(info.feature_id)
+
     dw = (@ori_contents_width + 54) / 2
     crect = Rect.new(dx, dy, dw, line_height)
     nrect = Rect.new(dx, dy, @ori_contents_width - 8, line_height)
     drx = dx + (@ori_contents_width + 54) / 2
     draw_diff_value(crect, value[1], is_percent) if @comparing
     draw_right_arrow(drx, dy)                    if @comparing
-    change_color(param_change_color(value[0] - value[1]))
+    delta = value[0] - value[1]
+    delta *= -1 if InverseColorFeature.include?(info.feature_id)
+    change_color(param_change_color(delta))
     draw_diff_value(nrect, value[0], is_percent)
     change_color(normal_color)
   end
