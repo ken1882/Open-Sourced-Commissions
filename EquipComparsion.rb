@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Extended Equipment Comparison Info                                        #
-#   Version: 1.0.1                                                            #  
+#   Version: 1.1.0                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,8 @@ $imported["COMP_EECI"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.10.25: Fix the bug of parameter calculation mistake and add text    #
+#                display of items for which have no difference.               #
 # -- 2018.10.21: Add inverse color option to value comparison                 #
 # -- 2018.10.19: Script completed                                             #
 # -- 2018.10.16: Received commission and started                              #
@@ -266,6 +268,9 @@ module COMP
       2 => "Substitute",
       3 => "Preserve TP",
     }
+    #--------------------------------------------------------------------------
+    # * Text displayed when two equipments have no difference:
+    NoDiffText = "No Difference"
     #--------------------------------------------------------------------------
     # * Feature name displayed at first of the line, before value comparison
     OtherFeatureName = {
@@ -731,7 +736,6 @@ class Window_EquipStatus < Window_Base
   end
   #---------------------------------------------------------------------------
   def set_base_actor(actor)
-    return if @base_actor == actor
     @feature_cache.clear
     @base_actor = actor
   end
@@ -928,9 +932,8 @@ class Window_EquipStatus < Window_Base
         b = @template_item.param(i)
         next if a - b == 0
         base = (get_cache_feature(i, :param, i) || 0)
-        a += base
-        b += base
-        push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,b], str))
+        a += base - b
+        push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,base], str))
       end
     end
   end
@@ -954,9 +957,8 @@ class Window_EquipStatus < Window_Base
         delta = delta.round(2) if delta.is_a?(Float)
         return if delta == 0
         base = (get_cache_feature(feature_id, :features_sum_all, feature_id) || 0)
-        a += base
-        b += base
-        push_new_comparison(stage, DiffInfo.new(feature_id, 0, [a,b], str))
+        a += base - b
+        push_new_comparison(stage, DiffInfo.new(feature_id, 0, [a,base], str))
       end
     else
       len.times do |i|
@@ -976,9 +978,8 @@ class Window_EquipStatus < Window_Base
           delta = delta.round(2) if delta.is_a?(Float)
           next if delta == 0
           base = (get_cache_feature(hash_feature_idx(feature_id, i), :features_sum, feature_id, i) || 0)
-          a += base
-          b += base
-          push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,b], str))
+          a += base - b
+          push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,base], str))
         end
       end # len.times
     end # if len ==0
@@ -1005,8 +1006,8 @@ class Window_EquipStatus < Window_Base
         base = get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
         base = 1 if base.nil?
         a *= base
-        b *= base
-        push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,b], str))
+        a /= b
+        push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,base], str))
       end
     end
   end
@@ -1080,15 +1081,13 @@ class Window_EquipStatus < Window_Base
         if pi
           base = get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id)
           base = 1 if base.nil?
-          a *= base
-          b *= base
+          a *= base / b
         else
           base = (get_cache_feature(hash_feature_idx(feature_id, id), method_symbol, feature_id, id) || 0)
-          a += base
-          b += base
+          a += base - b
         end
         str = get_feature_name(feature_id, id)
-        push_new_comparison(stage, DiffInfo.new(feature_id, id, [a,b], str))
+        push_new_comparison(stage, DiffInfo.new(feature_id, id, [a,base], str))
       end
     end
   end
@@ -1244,7 +1243,7 @@ class Window_EquipStatus < Window_Base
     contents.clear
     last_display_group = ''
     @comparing = !cur_feat
-
+    return draw_nodiff_text if list.size == 0
     dy = 0
     list.each_with_index do |info, i|
       feature_id = info.feature_id
@@ -1263,6 +1262,10 @@ class Window_EquipStatus < Window_Base
       draw_item(@dx, dy, info)
       dy += line_height
     end
+  end
+  #---------------------------------------------------------------------------
+  def draw_nodiff_text
+    self.contents.draw_text(@dx, 4, @ori_contents_width, line_height, NoDiffText)
   end
   #---------------------------------------------------------------------------
   def draw_compare_result(cur_feat = false)
