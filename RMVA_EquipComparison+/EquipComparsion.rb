@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Extended Equipment Comparison Info                                        #
-#   Version: 1.1.0                                                            #  
+#   Version: 1.1.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_EECI"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.10.29: Fix divided by zero error                                    #
 # -- 2018.10.25: Fix the bug of parameter calculation mistake and add text    #
 #                display of items for which have no difference.               #
 # -- 2018.10.21: Add inverse color option to value comparison                 #
@@ -335,7 +336,7 @@ module COMP
     end
   end
 end
-
+ 
 #==========================================================================
 # ** RPG::BaseItem
 #--------------------------------------------------------------------------
@@ -362,7 +363,9 @@ class RPG::BaseItem
   # * Calculate Complement of Feature Values
   #--------------------------------------------------------------------------
   def features_pi(code, id)
-    result = features_with_id(code, id).inject(1.0) {|r, ft| r *= ft.value }
+    result = features_with_id(code, id).inject(1.0){ |r, ft|
+      r *= (ft.value == 0.0) ? 0.0000001 : ft.value
+    }
   end
   #--------------------------------------------------------------------------
   # * Calculate Sum of Feature Values (Specify Data ID)
@@ -445,6 +448,19 @@ class Window_Base < Window
     return self.visible
   end
   #---------------------------------------------------------------------------
+end
+#==============================================================================
+# ■ Game_BattlerBase
+#==============================================================================
+class Game_BattlerBase
+  #--------------------------------------------------------------------------
+  # * Overwrite: features_pi with zero dirty hack
+  #--------------------------------------------------------------------------
+  def features_pi(code, id)
+    features_with_id(code, id).inject(1.0) {|r, ft|
+      r *= (ft.value == 0.0) ? 0.0000001 : ft.value
+    }
+  end
 end
 #==============================================================================
 # ** Module of this script
@@ -1005,8 +1021,7 @@ class Window_EquipStatus < Window_Base
         next if delta == 0
         base = get_cache_feature(hash_feature_idx(feature_id, i), :features_pi, feature_id, i)
         base = 1 if base.nil?
-        a *= base
-        a /= b
+        a *= base / b
         push_new_comparison(stage, DiffInfo.new(feature_id, i, [a,base], str))
       end
     end
