@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Counter Attack+                                                           #
-#   Version: 1.0.3                                                            #  
+#   Version: 1.1.0                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_CAP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.10.31: Add new commissioned features                                #
 # -- 2018.10.30: Compatible with YEA's battle engine                          #
 # -- 2018.10.30: Fix small NoMethodError                                      #
 # -- 2018.10.30: Script completed                                             #
@@ -52,11 +53,55 @@ $imported["COMP_CAP"] = true
 #  The state with higher prioity will be chosen, and chose the one with lower #
 #  id if same priority.                                                       #
 #                                                                             #
-#  If you want to cancel the 'evasion effect' of counter-attack, just add     #
-# ', eva:false' after the id like: <counterskill: 4, eva:false>               #
-# This will result the battler counter-attack after taken the damage.         #
+# > Custom Options:                                                           #
+#  Available options:                                                         #
+#     - eva: Evade the attack if counter-attack is occurred.                  #
+#     - igz: Bypass the counter-attack if is not hit.                         #
+#     - frc: Ignore mp/tp requirement and use without consume                 #
+#     - gen: Counter-attack to Generic attack/Certain hit                     #
+#     - phy: Counter-attack to physical attacks.                              #
+#     - mag: Counter-attack to magical attacks.                               #
 #                                                                             #
-#   Most of editable option is in the module below, read the comments to know #
+#                                                                             #
+#  If you want to change the deafault option, add:                            #
+#  ', (option_name): true/false' within the '<>', for example, if you don't   #
+#  want to evade the attack if counter-attack occurrs, and the counter-attack #
+#  skill id be 4, the notetag should like:                                    #
+#                                                                             #
+#  <counterskill: 4, eva:false>                                               #
+#                                                                             #
+#  And another example:                                                       #
+#                                                                             #
+#  <counterskill: 1, eva:true, mag:true, igz:true>                            #
+#   ↑                                                                         #
+#  Means if counter-attack occurred, it'll evade the attack, even if it's a   #
+#  magical attack, as long as the attack hitted the battler.                  #
+#                                                                             #
+#  Contrast example:                                                          #
+#                                                                             #
+#  <counterskill: 123, eva: false, mag:false, igz:false>                      #
+#   ↑                                                                         #
+#  This is means it'll take the damage before counter-attack, except the      #
+#  magical attack, and the battler will counter-attack anyway despite the     #
+#  attack didn't hit it.                                                      #
+#                                                                             #
+#  If you didn't specified the option in notetag, it'll take the default      #
+#  setting, which is adjustable below. E.X:                                   #
+#                                                                             #
+#   <counterskill: 1, igz:true, eva:false>                                    #
+#    ↑                                                                        #
+#  This is means the 'igz'(ignore zero damage) option is true and 'eva' is    #
+#  false, and the others will set to default.                                 #
+#                                                                             #
+#  If the your default setting is unable to counter magic attack but you want #
+#  to enable in some place; and the second one is able to counter all types.  #
+#                                                                             #
+#   <counterskill: 123, mag:true>                                             #
+#   <counterskill: 123, mag:true, phy:true, gen:true>                         #
+#   (chagne true to false if your default setting is true but you don't want  #
+#    it able to counter somewhere)                                            #
+#                                                                             #
+#  Most of editable option is in the module below, read the comments to know  #
 # what's it doing and how to adjust them for your needs.                      #
 #=============================================================================#
 #                            ** Compatibility **                              #
@@ -70,6 +115,7 @@ $imported["COMP_CAP"] = true
 # you have other battle system installed, this script won't guaranteed to     #
 # work properly.                                                              #
 #=============================================================================#
+
 
 #==============================================================================
 # ** Vocab
@@ -98,12 +144,33 @@ module COMP
     # The default counter-attack skill id
     DefaultSkillId = 1
 
-    # The if default evasion flag not specified in notetag
+    # Default settings: flags when note specified in notetag
+    # Whether evade incoming damage
     DefaultEvasion = true
 
+    # Whether the counter-skill costs mp/tp, if false and battker has 
+    # no enough mp/tp, the counter-attack won't occurrs
+    DefaultForceCounter = false
+
+    # Whether CNT valid to physical attacks
+    DefaultCounterPhysic = true
+
+    # Whether CNT valid to magical attacks
+    DefaultCounterMagic = false
+
+    # Whether CNT valid to certain hit
+    DefaultCounterGeneric = false
+
+    # Whether pass counter-attack if damage received is zero
+    DefaultIgnoreZero   = true
+
     # Don't edit this unless you know what're you doing
-    CounterSkill = Struct.new(:skill_id, :evasion)
-    DefaultCounterSkill = CounterSkill.new(DefaultSkillId, DefaultEvasion)
+    CounterSkill = Struct.new(:skill_id, :evasion, :ignore_zero, :forced, :hit_types)
+    DefaultCounterSkill = CounterSkill.new(DefaultSkillId)
+    DefaultCounterSkill.evasion = DefaultEvasion
+    DefaultCounterSkill.ignore_zero = DefaultIgnoreZero
+    DefaultCounterSkill.forced = DefaultForceCounter
+    DefaultCounterSkill.hit_types = [DefaultCounterGeneric, DefaultCounterPhysic, DefaultCounterMagic]
   end
 end
 #==============================================================================
@@ -138,16 +205,37 @@ class RPG::BaseItem
     self.note.split(/[\r\n]+/).each do |line|
       case line
       when COMP::CounterAttackPlus::Regex::CounterSkill
-        instance_eval("parse_counterskill_data(#{$1.lstrip})")
-      end
-    end
-  end
-  #------------------------------------------------------------------------------
-  def parse_counterskill_data(*args)
-    sid  = args[0].to_i
-    args = args[1] ? args[1] : {}
-    eva  = args[:eva].nil? ? COMP::CounterAttackPlus::DefaultCounterSkill : args[:eva]
-    @counterskill = COMP::CounterAttackPlus::CounterSkill.new(sid, eva)
+        args = $1.lstrip.split(',')
+        sid  = args[0].to_i
+        @counterskill = COMP::CounterAttackPlus::DefaultCounterSkill.dup
+        @counterskill.skill_id = sid
+        args.each do |arg|
+          case arg.downcase
+          when /eva:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.evasion = (str == 'true') ? true : false
+          when /igz:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.ignore_zero = (str == 'true') ? true : false
+          when /frc:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.forced = (str == 'true') ? true : false
+          when /gen:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.hit_types[0] = true  if str == 'true'
+            @counterskill.hit_types[0] = false if str == 'false'
+          when /phy:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.hit_types[1] = true  if str == 'true'
+            @counterskill.hit_types[1] = false if str == 'false'
+          when /mag:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.hit_types[2] = true  if str == 'true'
+            @counterskill.hit_types[2] = false if str == 'false'
+          end # case arg
+        end # each arg
+      end # case line
+    end # each line
   end
   #------------------------------------------------------------------------------
 end
@@ -175,6 +263,57 @@ class Game_BattlerBase
     return nil
   end
   #------------------------------------------------------------------------------
+end
+#==============================================================================
+# ** Game_Battler
+#==============================================================================
+class Game_Battler < Game_BattlerBase
+  #--------------------------------------------------------------------------
+  DefaultCounterHitTypes = COMP::CounterAttackPlus::DefaultCounterSkill.hit_types
+  #--------------------------------------------------------------------------
+  # * Overwrite: item_cnt
+  #--------------------------------------------------------------------------
+  def item_cnt(user, item, hit_types = DefaultCounterHitTypes)
+    return 0 unless hit_types[item.hit_type]
+    return 0 unless opposite?(user)         # No counterattack on allies
+    return cnt                              # Return counterattack rate
+  end
+  #--------------------------------------------------------------------------
+  # * Overwrite: item_apply
+  #--------------------------------------------------------------------------
+  alias item_apply_comp_cap item_apply
+  def item_apply(user, item)
+    puts "Item apply, user: #{user.name} target: #{self.name} i:#{item.name}"
+    if @result_pre_tested
+      if @result.hit?
+        unless item.damage.none?
+          @result.critical = (rand < item_cri(user, item))
+          make_damage_value(user, item)
+          execute_damage(user)
+        end
+        item.effects.each {|effect| item_effect_apply(user, item, effect) }
+        item_user_effect(user, item)
+      end # if result.hit
+      make_miss_popups(user, item) if $imported["YEA-BattleEngine"]
+    else
+      item_apply_comp_cap(user, item)
+    end
+  end
+  #--------------------------------------------------------------------------
+  def test_item_hit(user, item)
+    @result.clear
+    @result_pre_tested = true
+    @result.used = item_test(user, item)
+    @result.missed = (@result.used && rand >= item_hit(user, item))
+    @result.evaded = (!@result.missed && rand < item_eva(user, item))
+    @result
+  end
+  #--------------------------------------------------------------------------
+  def clear_result
+    @result_pre_tested = false
+    @result.clear
+  end
+  #--------------------------------------------------------------------------
 end
 #==============================================================================
 # ** Game_Actor
@@ -222,6 +361,16 @@ end
 #==============================================================================
 class Scene_Battle < Scene_Base
   #--------------------------------------------------------------------------
+  SimpleAction = Struct.new(:user, :targets, :item, :forced)
+  #--------------------------------------------------------------------------
+  # * Alias: start
+  #--------------------------------------------------------------------------
+  alias start_comp_cap start
+  def start
+    @queued_actions = []
+    start_comp_cap
+  end
+  #--------------------------------------------------------------------------
   def invoke_item_yeabe(target, item)
     show_animation([target], item.animation_id) if separate_ani?(target, item)
     if target.dead? != item.for_dead_friend?
@@ -231,20 +380,37 @@ class Scene_Battle < Scene_Base
     return true
   end
   #--------------------------------------------------------------------------
+  # * alias: use_item
+  #--------------------------------------------------------------------------
+  alias use_item_comp_cap use_item
+  def use_item
+    item = @subject.current_action.item
+    puts "Use item #{@subject.name} #{item.name}"
+    use_item_comp_cap
+    puts "Queued: #{@queued_actions.size}"
+    execute_queued_action
+  end
+  #--------------------------------------------------------------------------
   # * Overwrite: Invoke Skill/Item
   #--------------------------------------------------------------------------
   def invoke_item(target, item)
+    @counter_ok = false
     return if (@subject.dead? rescue true)
+    puts "user: #{@subject.name} target: #{target.name} item: #{item.name}"
     cont = invoke_item_yeabe(target, item) if $imported["YEA-BattleEngine"]
     return unless cont
-    avoid_damage = true
-    if rand < target.item_cnt(@subject, item)
-      avoid_damage = invoke_counter_attack(target, item)
+
+    target.test_item_hit(@subject, item)
+    counter = target.counterskill
+    return unless counter.forced || target.skill_cost_payable?($data_skills[counter.skill_id])
+    if rand < target.item_cnt(@subject, item, counter.hit_types)
+      invoke_counter_attack(target, item) unless (!target.result.hit? && !counter.ignore_zero)
     elsif rand < target.item_mrf(@subject, item)
       invoke_magic_reflection(target, item)
     else
       apply_item_effects(apply_substitute(target, item), item)
     end
+    target.clear_result
     @subject.last_target_index = target.index
   end
   #--------------------------------------------------------------------------
@@ -259,35 +425,43 @@ class Scene_Battle < Scene_Base
     end
     cntitem = $data_skills[counterskill.skill_id]
     @log_window.display_counter(target, cntitem)
-    item_apply_autotaget(target, @subject, cntitem)
+    apply_counterattack(target, @subject, cntitem, counterskill.forced)
   end
   #--------------------------------------------------------------------------
-  def item_apply_autotaget(user, target, item)
-
+  def apply_counterattack(user, target, item, forced)
+    
     # if item scope is for all
     if item.for_all?
       if item.for_opponent?;       targets = user.opponents_unit.alive_members;
       elsif item.for_dead_friend?; targets = user.friends_unit.dead_members;
       elsif item.for_friend?;      targets = user.friends_unit.alive_members;
       end
-      show_animation(targets, item.animation_id)
-      targets.each do |t|
-        t.item_apply(user, item)
-        refresh_status
-        @log_window.display_action_results(t, item)
-      end
-
+      register_counter_action(SimpleAction.new(user, targets, item, forced))
     # if item scope if for one
     else
       if item.for_opponent?; target = target;
       else; target = user;
       end
-      target_tmp = $imported["YEA-BattleEngine"] ? [target] : target
-      show_animation(target_tmp, item.animation_id)
-      target.item_apply(user, item)
-      refresh_status
-      @log_window.display_action_results(target, item)
+      register_counter_action(SimpleAction.new(user, [target], item, forced))
     end
+  end
+  #--------------------------------------------------------------------------
+  def register_counter_action(action)
+    @queued_actions << action
+  end
+  #--------------------------------------------------------------------------
+  def execute_queued_action
+    @queued_actions.each do |action|
+      puts "Exe queued: #{action.user.name} #{action.item.name}"
+      show_animation(action.targets, action.item.animation_id)
+      action.user.pay_skill_cost(aciton.item) unless action.forced
+      action.targets.each do |t|
+        t.item_apply(action.user, action.item)
+        refresh_status
+        @log_window.display_action_results(t, action.item)
+      end # each target
+    end # each action
+    @queued_actions.clear
   end
   #--------------------------------------------------------------------------
 end
