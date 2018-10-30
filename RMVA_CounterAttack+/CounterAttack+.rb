@@ -222,9 +222,21 @@ end
 #==============================================================================
 class Scene_Battle < Scene_Base
   #--------------------------------------------------------------------------
+  def invoke_item_yeabe(target, item)
+    show_animation([target], item.animation_id) if separate_ani?(target, item)
+    if target.dead? != item.for_dead_friend?
+      @subject.last_target_index = target.index
+      return false
+    end
+    return true
+  end
+  #--------------------------------------------------------------------------
   # * Overwrite: Invoke Skill/Item
   #--------------------------------------------------------------------------
   def invoke_item(target, item)
+    return if (@subject.dead? rescue true)
+    cont = invoke_item_yeabe(target, item) if $imported["YEA-BattleEngine"]
+    return unless cont
     avoid_damage = true
     if rand < target.item_cnt(@subject, item)
       avoid_damage = invoke_counter_attack(target, item)
