@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Counter Attack+                                                           #
-#   Version: 1.0.1                                                            #  
+#   Version: 1.0.2                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_CAP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.10.30: Compatible with YEA's battle engine                          #
 # -- 2018.10.30: Fix small NoMethodError                                      #
 # -- 2018.10.30: Script completed                                             #
 # -- 2018.10.30: Received commission and started                              #
@@ -269,7 +270,8 @@ class Scene_Battle < Scene_Base
       if item.for_opponent?; target = target;
       else; target = user;
       end
-      show_animation(target, item.animation_id)
+      target_tmp = $imported["YEA-BattleEngine"] ? [target] : target
+      show_animation(target_tmp, item.animation_id)
       target.item_apply(user, item)
       refresh_status
       @log_window.display_action_results(target, item)
