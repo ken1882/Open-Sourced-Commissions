@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Counter Attack+                                                           #
-#   Version: 1.0.0                                                            #  
+#   Version: 1.0.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_CAP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.10.30: Fix small NoMethodError                                      #
 # -- 2018.10.30: Script completed                                             #
 # -- 2018.10.30: Received commission and started                              #
 #                                                                             #
@@ -144,7 +145,7 @@ class RPG::BaseItem
   def parse_counterskill_data(*args)
     sid  = args[0].to_i
     args = args[1] ? args[1] : {}
-    eva  = args[:eva].nil? ? DefaultCounterSkill : args[:eva]
+    eva  = args[:eva].nil? ? COMP::CounterAttackPlus::DefaultCounterSkill : args[:eva]
     @counterskill = COMP::CounterAttackPlus::CounterSkill.new(sid, eva)
   end
   #------------------------------------------------------------------------------
