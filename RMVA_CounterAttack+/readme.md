@@ -1,4 +1,4 @@
-Commission name: Extend Equipment Comparison Information
+Commission name: CounterAttackPlus
 
 Commissioned by: Vaijack8 (via RM Discord server)
 
