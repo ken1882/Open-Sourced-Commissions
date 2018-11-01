@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Counter Attack+                                                           #
-#   Version: 1.1.1                                                            #  
+#   Version: 1.1.2                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.10.21                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_CAP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.11.01: Compatible with YEA's elemental popup                        #
 # -- 2018.10.31: Add new commissioned features                                #
 # -- 2018.10.30: Compatible with YEA's battle engine                          #
 # -- 2018.10.30: Fix small NoMethodError                                      #
@@ -66,10 +67,9 @@ $imported["COMP_CAP"] = true
 #         ** This option does not affected by 'eva:true' **                   #
 #                                                                             #
 #     - frc(FoRCed):                                                          #
-#          true:  Ignore mp/tp requirement of counterskill and use without    #
-#                 consime mp/tp.                                              #
-#          false: Will not counter if no enough mp/tp, eva will be canceled   #
-#                 if set to true.                                             #
+#          true:  Execute the skill even if it cannot be used normally, and   #
+#                 the counter will NOT costs mp/tp, too.                      #
+#          false: Won't counter if the counterskill can't be used normally.   #
 #                                                                             #
 #     - gen(GENeric attack):                                                  #
 #          true:  Counter-attack to Generic attack/Certain hit.               #
@@ -169,8 +169,8 @@ module COMP
     # Whether evade incoming damage
     DefaultEvasion = true
 
-    # Whether the counter-skill costs mp/tp, if false and battker has 
-    # no enough mp/tp, the counterattack will not occurrs
+    # Whether the counter-skill can be used, if false and battler
+    # cannot uses it, the counterattack will not occurrs
     DefaultForceCounter   = false
 
     # Whether CNT valid to physical attacks
@@ -194,7 +194,9 @@ module COMP
     DefaultCounterSkill.hit_types   = [DefaultCounterGeneric, DefaultCounterPhysic, DefaultCounterMagic]
 
     SimpleAction = Struct.new(:user, :targets, :item, :forced)
+
   end
+
 end
 #==============================================================================
 # ** DataManager
@@ -310,6 +312,10 @@ class Game_Battler < Game_BattlerBase
   def item_apply(user, item)
     # If the result has been determined
     if @result_pre_tested
+
+      # Feature from Yanfly battle engine ext: elemental popup
+      @element_popup_tag = element_popup_tag?(user, item) if $imported["YEA-ElementalPopups"]
+
       if @result.hit?
         unless item.damage.none?
           @result.critical = (rand < item_cri(user, item))
@@ -323,6 +329,7 @@ class Game_Battler < Game_BattlerBase
     else
       item_apply_comp_cap(user, item)
     end
+    @element_popup_tag = nil
   end
   #--------------------------------------------------------------------------
   # * Pre-test whether the item hit successfully
@@ -393,6 +400,8 @@ class Scene_Battle < Scene_Base
   #--------------------------------------------------------------------------
   SimpleAction = COMP::CounterAttackPlus::SimpleAction
   #--------------------------------------------------------------------------
+  attr_accessor :queued_actions
+  #--------------------------------------------------------------------------
   # * Alias: start
   #--------------------------------------------------------------------------
   alias start_comp_cap start
@@ -401,7 +410,7 @@ class Scene_Battle < Scene_Base
     start_comp_cap
   end
   #--------------------------------------------------------------------------
-  # * Mehtod from YEA-BattleEngine
+  # * Method from YEA-BattleEngine
   #------------------------------------------------------------------------------
   def invoke_item_yeabe(target, item)
     show_animation([target], item.animation_id) if separate_ani?(target, item)
@@ -424,9 +433,8 @@ class Scene_Battle < Scene_Base
   # * Overwrite: Invoke Skill/Item
   #--------------------------------------------------------------------------
   def invoke_item(target, item)
-    return if (@subject.dead? rescue true)
-    cont = invoke_item_yeabe(target, item) if $imported["YEA-BattleEngine"]
-    return unless cont
+    return if (@subject.dead? rescue true) # return if target dead
+    return if $imported["YEA-BattleEngine"] && !invoke_item_yeabe(target, item)
 
     target.test_item_hit(@subject, item)
 
@@ -443,7 +451,7 @@ class Scene_Battle < Scene_Base
   #--------------------------------------------------------------------------
   def counter_successful?(user, target, item, counterskill)
     return false if !target.result.hit? && counterskill.ignore_zero
-    return false if !counterskill.forced && !target.skill_cost_payable?($data_skills[counterskill.skill_id])
+    return false if !counterskill.forced && !target.usable?($data_skills[counterskill.skill_id])
     return rand < target.item_cnt(user, item, counterskill.hit_types)
   end
   #--------------------------------------------------------------------------
