@@ -1,8 +1,8 @@
 #=============================================================================#
 #   Counter Attack+                                                           #
-#   Version: 1.1.2                                                            #  
+#   Version: 1.2.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2018.10.21                                                   #  
+#   Last update: 2018.11.03                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported["COMP_CAP"] = true
@@ -10,6 +10,7 @@ $imported["COMP_CAP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.11.03: Add counterskill <UNI> and <ETE> option.                     #
 # -- 2018.11.01: Compatible with YEA's elemental popup                        #
 # -- 2018.10.31: Add new commissioned features                                #
 # -- 2018.10.30: Compatible with YEA's battle engine                          #
@@ -46,9 +47,8 @@ $imported["COMP_CAP"] = true
 # the counter-attack moment.                                                  #
 #                                                                             #
 #   For example, place <counterskill: 4> under the enemy/actor/class/state/   #
-#   or equipment's notetag field will make that battler's counter-attack to   #
-#  skill which id is 4, note that overwirte priority is:                      #
-#                 State > Equipment > Actor/Enemy > Class                     #
+#   or equipment's notetag field will make that battler's counterskill to     #
+#   skill which id is 4.                                                      #
 #                                                                             #
 #  If battler have multiple states wherea has multiple counter-attack option, #
 #  The state with higher prioity will be chosen, and chose the one with lower #
@@ -60,6 +60,8 @@ $imported["COMP_CAP"] = true
 #     - eva(EVAde):                                                           #
 #          true:  Evade the attack if counter-attack is occurred.             #
 #          false: Counterattack after took the damage.                        #
+#       Note: If the battler has any counterskill with 'eva:true', the ones   #
+#       with 'eva:false' will not execute.                                    #
 #                                                                             # 
 #     - igz(IGnoreZero):                                                      #
 #          true:  No counterattack if attack not hit.                         #
@@ -83,6 +85,21 @@ $imported["COMP_CAP"] = true
 #          true:  Counter-attack to magical attacks.                          #
 #          false: No counterattack when taking magical hit.                   #
 #                                                                             #
+#     - uni(UNIque):                                                          #
+#          true:  Only one counterskill will execute if there're many.        #
+#          false: If no counterskill with <uni: true>, they'll execute all.   #
+#                                                                             #
+#           Note that the <uni: true> overwrite priority is:                  #
+#              State > Equipment > Actor/Enemy > Class                        #
+#                                                                             #
+#     - ete(End-turn execute):                                                #
+#          true:  The counterskill will executed at end of turn instead       #
+#                 counter immediately after receive damage.                   #
+#          false: The counterskill will executed after receive damage instead #
+#                 waiting after every enemy taken action.                     #
+#                                                                             #
+#          Note: if the battler who triggered counter with <ete: true>, and   #
+#          it dies before the turn ends, the counter will be canceled.        #
 #                                                                             #
 #  If you want to change the deafault option, add:                            #
 #  ', (option_name): true/false' within the '<>', for example, if you don't   #
@@ -121,6 +138,7 @@ $imported["COMP_CAP"] = true
 #   <counterskill: 123, mag:true, phy:true, gen:true>                         #
 #   (chagne true to false if your default setting is true but you don't want  #
 #    it able to counter somewhere)                                            #
+#                                                                             #
 #                                                                             #
 #  Most of editable option is in the module below, read the comments to know  #
 # what's it doing and how to adjust them for your needs.                      #
@@ -185,13 +203,21 @@ module COMP
     # Whether pass counter-attack if damage received is zero
     DefaultIgnoreZero     = true
 
+    # Whether the counterskill is unique
+    DefaultUnique         = false
+
+    # Whether counter at turn-end
+    DefaultEndTurnExecute = false
+
     # Don't edit this unless you know what you're doing
-    CounterSkill = Struct.new(:skill_id, :evasion, :ignore_zero, :forced, :hit_types)
+    CounterSkill = Struct.new(:skill_id, :evasion, :ignore_zero, :forced, :hit_types, :unique, :end_turn)
     DefaultCounterSkill = CounterSkill.new(DefaultSkillId)
     DefaultCounterSkill.evasion     = DefaultEvasion
     DefaultCounterSkill.ignore_zero = DefaultIgnoreZero
     DefaultCounterSkill.forced      = DefaultForceCounter
     DefaultCounterSkill.hit_types   = [DefaultCounterGeneric, DefaultCounterPhysic, DefaultCounterMagic]
+    DefaultCounterSkill.unique      = DefaultUnique
+    DefaultCounterSkill.end_turn    = DefaultEndTurnExecute
 
     SimpleAction = Struct.new(:user, :targets, :item, :forced)
 
@@ -257,6 +283,14 @@ class RPG::BaseItem
             str = arg.split(':').at(1)
             @counterskill.hit_types[2] = true  if str == 'true'
             @counterskill.hit_types[2] = false if str == 'false'
+          when /uni:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.unique = true  if str == 'true'
+            @counterskill.unique = false if str == 'false'
+          when /ete:(.+)/i
+            str = arg.split(':').at(1)
+            @counterskill.end_turn = true  if str == 'true'
+            @counterskill.end_turn = false if str == 'false'
           end # case arg
         end # each arg
       end # case line
@@ -284,10 +318,13 @@ class Game_BattlerBase
   end
   #------------------------------------------------------------------------------
   def counterskill
+    re = []
     sorted_states.each do |obj|
-      return obj.counterskill if obj.counterskill
+      next unless obj.counterskill
+      return obj.counterskill if obj.counterskill.unique
+      re << obj.counterskill
     end
-    return nil
+    return re
   end
   #------------------------------------------------------------------------------
 end
@@ -358,11 +395,15 @@ class Game_Actor < Game_Battler
   #------------------------------------------------------------------------------
   def counterskill
     re = super
-    return re if re # Return result if states has counterskill
+    # Return result if state counterskill is unique
+    return [re] unless re.is_a?(Array)
     (equips.compact + [actor] + [self.class]).each do |obj|
-      return obj.counterskill if obj.counterskill
+      next unless obj.counterskill
+      return [obj.counterskill] if obj.counterskill.unique
+      re << obj.counterskill
     end
-    return DefaultCounterSkill # return default if no special counterskill
+    return re unless re.empty?
+    return [DefaultCounterSkill] # return default if no special counterskill
   end
   #------------------------------------------------------------------------------
 end
@@ -375,9 +416,11 @@ class Game_Enemy < Game_Battler
   #------------------------------------------------------------------------------
   def counterskill
     re = super
-    return re if re
-    re = enemy.counterskill
-    return re.nil? ? DefaultCounterSkill : re
+    # Return result if state counterskill is unique
+    return [re] unless re.is_a?(Array)
+    re << enemy.counteskill if enemy.counterskill
+    return re unless re.empty?
+    return [DefaultCounterSkill] # return default if no special counterskill
   end
   #------------------------------------------------------------------------------
 end
@@ -398,15 +441,16 @@ end
 #==============================================================================
 class Scene_Battle < Scene_Base
   #--------------------------------------------------------------------------
-  SimpleAction = COMP::CounterAttackPlus::SimpleAction
+  SimpleAction    = COMP::CounterAttackPlus::SimpleAction
   #--------------------------------------------------------------------------
-  attr_accessor :queued_actions
+  attr_accessor :queued_counters, :queued_endt_counters
   #--------------------------------------------------------------------------
   # * Alias: start
   #--------------------------------------------------------------------------
   alias start_comp_cap start
   def start
-    @queued_actions = []
+    @queued_counters = []
+    @queued_endt_counters = []
     start_comp_cap
   end
   #--------------------------------------------------------------------------
@@ -427,7 +471,7 @@ class Scene_Battle < Scene_Base
   def use_item
     item = @subject.current_action.item
     use_item_comp_cap
-    execute_queued_action
+    execute_queued_counter
   end
   #--------------------------------------------------------------------------
   # * Overwrite: Invoke Skill/Item
@@ -437,9 +481,9 @@ class Scene_Battle < Scene_Base
     return if $imported["YEA-BattleEngine"] && !invoke_item_yeabe(target, item)
 
     target.test_item_hit(@subject, item)
-
-    if counter_successful?(@subject, target, item, target.counterskill)
-      invoke_counter_attack(target, item)
+    counterskill = target.counterskill
+    if counter_successful?(@subject, target, item, counterskill)
+      invoke_counter_attack(target, item, counterskill)
     elsif rand < target.item_mrf(@subject, item)
       invoke_magic_reflection(target, item)
     else
@@ -450,27 +494,32 @@ class Scene_Battle < Scene_Base
   end
   #--------------------------------------------------------------------------
   def counter_successful?(user, target, item, counterskill)
-    return false if !target.result.hit? && counterskill.ignore_zero
-    return false if !counterskill.forced && !target.usable?($data_skills[counterskill.skill_id])
-    return rand < target.item_cnt(user, item, counterskill.hit_types)
+    counterskill.select!{|skill| !skill.ignore_zero} if !target.result.hit?
+    counterskill.select!{|skill|
+      (skill.forced || target.usable?($data_skills[skill.skill_id])) &&
+      (target.item_cnt(user, item, skill.hit_types) > 0.0)
+    }
+    return !counterskill.empty? && rand < target.cnt
   end
   #--------------------------------------------------------------------------
   # * Invoke Counterattack
   #--------------------------------------------------------------------------
-  def invoke_counter_attack(target, item)
-    counterskill = target.counterskill
-    
-    if counterskill.evasion
+  def invoke_counter_attack(target, item, counterskill)
+    evade = counterskill.any?{|s| s.evasion}
+    if evade
       Sound.play_evasion
+      @log_window.display_evasion(target, item)
+      counterskill.select{|s| s.evasion}
     else
       apply_item_effects(apply_substitute(target, item), item)
     end
-    cntitem = $data_skills[counterskill.skill_id]
-    @log_window.display_counter(target, cntitem)
-    apply_counterattack(target, @subject, cntitem, counterskill.forced)
+    counterskill.each do |skill|
+      cntitem = $data_skills[skill.skill_id]
+      apply_counterattack(target, @subject, cntitem, skill.forced, skill.end_turn)
+    end
   end
   #--------------------------------------------------------------------------
-  def apply_counterattack(user, target, item, forced)
+  def apply_counterattack(user, target, item, forced, end_turn)
     
     # if item scope is for all
     if item.for_all?
@@ -478,26 +527,34 @@ class Scene_Battle < Scene_Base
       elsif item.for_dead_friend?; targets = user.friends_unit.dead_members;
       elsif item.for_friend?;      targets = user.friends_unit.alive_members;
       end
-      register_counter_action(SimpleAction.new(user, targets, item, forced))
+      register_counter_action(SimpleAction.new(user, targets, item, forced), end_turn)
     # if item scope if for one
     else
       if item.for_opponent?; target = target;
       else; target = user;
       end
-      register_counter_action(SimpleAction.new(user, [target], item, forced))
+      register_counter_action(SimpleAction.new(user, [target], item, forced), end_turn)
     end
   end
   #--------------------------------------------------------------------------
   # * Register counterattack action to queue
   #--------------------------------------------------------------------------
-  def register_counter_action(action)
-    @queued_actions << action
+  def register_counter_action(action, end_turn = COMP::CounterAttackPlus::DefaultEndTurnExecute)
+    if end_turn
+      @queued_endt_counters << action
+    else      
+      @queued_counters << action
+    end
   end
   #--------------------------------------------------------------------------
   # * Executed queued counterattacks after previous attack finished
   #--------------------------------------------------------------------------
-  def execute_queued_action
-    @queued_actions.each do |action|
+  def execute_queued_counter
+    ori_subject = @subject.clone if @subject
+    @queued_counters.each do |action|
+      next if action.user.dead?
+      @log_window.display_counter(action.user, action.item)
+      @subject = action.user
       show_animation(action.targets, action.item.animation_id)
       action.user.pay_skill_cost(action.item) unless action.forced
       action.targets.each do |t|
@@ -506,8 +563,38 @@ class Scene_Battle < Scene_Base
         refresh_status
         @log_window.display_action_results(t, action.item)
       end # each target
+      break if BattleManager.judge_win_loss
     end # each action
-    @queued_actions.clear
+    @subject = ori_subject
+    @queued_counters.clear
+  end
+  #--------------------------------------------------------------------------
+  # * Executed queued counterattacks at turn end
+  #--------------------------------------------------------------------------
+  def execute_endturn_counter
+    ori_subject = @subject.clone if @subject
+    @queued_endt_counters.each do |action|
+      next if action.user.dead?
+      @log_window.display_counter(action.user, action.item)
+      @subject = action.user
+      show_animation(action.targets, action.item.animation_id)
+      action.user.pay_skill_cost(action.item) unless action.forced
+      action.targets.each do |t|
+        next if (t.dead? rescue true)
+        t.item_apply(action.user, action.item)
+        refresh_status
+        @log_window.display_action_results(t, action.item)
+      end # each target
+      break if BattleManager.judge_win_loss
+    end # each action
+    @subject = ori_subject
+    @queued_endt_counters.clear
+  end
+  #--------------------------------------------------------------------------
+  alias turn_end_comp_cap turn_end
+  def turn_end
+    execute_endturn_counter
+    turn_end_comp_cap
   end
   #--------------------------------------------------------------------------
 end

@@ -2,7 +2,7 @@
 #   Extended Equipment Comparison Info                                        #
 #   Version: 1.1.1                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2018.10.21                                                   #  
+#   Last update: 2018.10.29                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported["COMP_EECI"] = true
