@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Counter Attack+                                                           #
-#   Version: 1.2.0                                                            #  
+#   Version: 1.2.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.11.03                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_CAP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2018.11.13: Compatible with Hime's skill links script                    #
 # -- 2018.11.03: Add counterskill <UNI> and <ETE> option.                     #
 # -- 2018.11.01: Compatible with YEA's elemental popup                        #
 # -- 2018.10.31: Add new commissioned features                                #
@@ -155,7 +156,7 @@ $imported["COMP_CAP"] = true
 # work properly.                                                              #
 #=============================================================================#
 
-
+if $imported["COMP_CAP"]
 #==============================================================================
 # ** Vocab
 #------------------------------------------------------------------------------
@@ -489,6 +490,10 @@ class Scene_Battle < Scene_Base
     else
       apply_item_effects(apply_substitute(target, item), item)
     end
+
+    # Compatible with Him's link skill script
+    @item_link_results << target.result.clone if $imported["RDeus - Hime Skill Links Plugin"]
+
     target.clear_result
     @subject.last_target_index = target.index
   end
@@ -598,3 +603,4 @@ class Scene_Battle < Scene_Base
   end
   #--------------------------------------------------------------------------
 end
+end # if imported/enable this script
