@@ -34,7 +34,7 @@ class Game_BattlerBase
   def update_cooldowns(amount = -1, stype_id = 0, skill_id = 0)
     return if cooldown_lock?
     reset_cooldowns if @cooldown.nil?
-    @cooldown.each do |skill, cdt|
+    @cooldown.each_key do |skill|
       skill = $data_skills[skill] if !skill.is_a?(RPG::Skill)
       next if stype_id != 0 && skill.stype_id != stype_id
       next if skill_id != 0 && skill.id != skill_id
