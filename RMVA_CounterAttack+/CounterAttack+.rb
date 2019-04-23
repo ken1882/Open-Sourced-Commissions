@@ -102,7 +102,7 @@ $imported["COMP_CAP"] = true
 #          Note: if the battler who triggered counter with <ete: true>, and   #
 #          it dies before the turn ends, the counter will be canceled.        #
 #                                                                             #
-#  If you want to change the deafault option, add:                            #
+#  If you want to change the default option, add:                            #
 #  ', (option_name): true/false' within the '<>', for example, if you don't   #
 #  want to evade the attack if counter-attack occurrs, and the counter-attack #
 #  skill id be 4, the notetag should like:                                    #
@@ -261,6 +261,7 @@ class RPG::BaseItem
         sid  = args[0].to_i
         @counterskill = COMP::CounterAttackPlus::DefaultCounterSkill.dup
         @counterskill.skill_id = sid
+        puts "#{self.id} has counter skill: #{sid}"
         args.each do |arg|
           case arg.downcase
           when /eva:(.+)/i
