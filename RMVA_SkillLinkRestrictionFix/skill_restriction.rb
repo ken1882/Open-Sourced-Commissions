@@ -693,7 +693,6 @@ class Game_BattlerBase
       skill = $data_skills[skill] if !skill.is_a?(RPG::Skill)
       next if stype_id != 0 && skill.stype_id != stype_id
       next if skill_id != 0 && skill.id != skill_id
-      puts "update cooldown: #{skill.id} #{cooldown?(skill) + amount}"
       set_cooldown(skill, cooldown?(skill) + amount)
     end
   end
