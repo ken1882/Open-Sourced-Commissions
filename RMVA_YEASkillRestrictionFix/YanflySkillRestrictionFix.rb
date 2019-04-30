@@ -2,7 +2,7 @@
 #   Patch for Yanfly Engine Ace - Skill Restrictions                          #
 #   Version: 1.0.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2019.04.23                                                   #
+#   Last update: 2019.04.27                                                   #
 #   Require Script:                                                           #
 #    * Yanfly Engine Ace - Skill Restrictions                                 #
 #=============================================================================#
