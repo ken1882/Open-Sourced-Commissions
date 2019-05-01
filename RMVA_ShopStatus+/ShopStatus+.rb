@@ -2,7 +2,7 @@
 #   Shop Item Status Plus                                                     #
 #   Version: 1.0.1                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2019.04.30                                                   #  
+#   Last update: 2019.05.01                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported["COMP_SISP"] = true
