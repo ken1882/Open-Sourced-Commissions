@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Shop Item Status Plus                                                     #
-#   Version: 1.0.0                                                            #  
+#   Version: 1.0.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2019.04.30                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported["COMP_SISP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2019.05.01: Fix slot name crash bug                                      #
 # -- 2019.04.30: Start the script and completed                               #
 #                                                                             #
 #=============================================================================#
@@ -852,6 +853,15 @@ class Window_ShopStatus < Window_Base
     when FEATURE_EQUIP_SEAL;    return $data_system.terms.etypes;
     else
       return []
+    end
+  end
+  #---------------------------------------------------------------------------
+  def slot_name(idx)
+    begin
+      re = Vocab::etype($game_party.leader.equip_slots[idx])
+      return re
+    rescue Exception => e
+      return ""
     end
   end
   #---------------------------------------------------------------------------
