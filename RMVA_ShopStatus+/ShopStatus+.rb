@@ -10,6 +10,8 @@ $imported["COMP_SISP"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+#                                                                             #
+# -- 2019.05.02: Fix double page turning bug                                  #
 # -- 2019.05.01: Fix slot name crash bug                                      #
 # -- 2019.04.30: Start the script and completed                               #
 #                                                                             #
@@ -486,15 +488,7 @@ class Window_ShopStatus < Window_Base
     return @line_max = contents_height / line_height
   end
   #---------------------------------------------------------------------------
-  # * Alias method: update
-  #---------------------------------------------------------------------------
-  alias update_sisp update
-  def update
-    update_sisp
-    update_page
-  end
-  #---------------------------------------------------------------------------
-  # * update page next/last
+  # * Overwrite: update page next/last
   #---------------------------------------------------------------------------
   def update_page
     if Input.trigger?(Key_nextpage)
