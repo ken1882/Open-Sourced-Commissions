@@ -1,6 +1,6 @@
 #=============================================================================#
 #   Extended Equipment Comparison Info                                        #
-#   Version: 1.2.1                                                            #  
+#   Version: 1.2.2                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2019.05.06                                                   #  
 #=============================================================================#
@@ -10,6 +10,7 @@ $imported[:CRDE_EECI] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2019.05.06: Current features ignore skills added by actor/class object   #
 # -- 2019.05.06: Add CRDE dependency                                          #
 # -- 2018.10.29: Fix divided by zero error                                    #
 # -- 2018.10.25: Fix the bug of parameter calculation mistake and add text    #
@@ -721,8 +722,17 @@ class Window_EquipStatus < Window_Base
     # Show current actor feature status
     if stage == :current
       return unless CurFeatureShow.include?(feature_id)
+
+      # Ignore skills added by actor/class objecy
+      ignore_list = []
+      if feature_id == FEATURE_SKILL_ADD || feature_id == FEATURE_SKILL_SEAL
+        (@actor.class.features_set(feature_id) + @actor.actor.features_set(feature_id)).each do |i|
+          ignore_list.push(i)
+        end
+      end
       feats = @actor.features_set(feature_id)
       feats.each do |i|
+        next if ignore_list.include?(i)
         str = sprintf(prefix[1], get_feature_name(feature_id, i))
         push_new_comparison(stage, DiffInfo.new(feature_id,i,true,str))
       end
