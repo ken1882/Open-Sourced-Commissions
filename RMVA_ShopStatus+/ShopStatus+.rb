@@ -1,16 +1,16 @@
 #=============================================================================#
 #   Shop Item Status Plus                                                     #
-#   Version: 1.0.1                                                            #  
+#   Version: 1.1.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2019.05.01                                                   #  
+#   Last update: 2019.05.06                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
-$imported["COMP_SISP"] = true
+$imported[:CRDE_SISP] = true
 #=============================================================================#
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
-#                                                                             #
+# -- 2019.05.06: Add CRDE dependency                                          #
 # -- 2019.05.02: Fix double page turning bug                                  #
 # -- 2019.05.01: Fix slot name crash bug                                      #
 # -- 2019.04.30: Start the script and completed                               #
@@ -45,6 +45,8 @@ $imported["COMP_SISP"] = true
 #=============================================================================#
 #                            ** Compatibility **                              #
 #-----------------------------------------------------------------------------#
+#   > CRDE Kernel is required                                                 #
+#   > CRDE Equipment info is required
 #   > Place this script under my EquipComparsion script if you have it.       #
 #   > Place this script under YEA's shop option script if you have it.        #
 #                                                                             #
@@ -54,60 +56,17 @@ $imported["COMP_SISP"] = true
 # variable/method name not changed.                                           #
 #=============================================================================#
 
+if !$imported[:CRDE_Kernel] || !$imported[:CRDE_EQInfo]
+  raise LoadError, "CRDE Kernel and equipment info is required for ShopStatus+ script"
+end
+
 #=============================================================================
 # * Module of this script
 #=============================================================================
-module COMP
+module CRDE
   module ShopItemStatusPlus
-    # Whether enable this script
-    Enable = true
-
-    # Text displayed when nothing to show
-    NothingText = "No Specials"
-
-    # if enabled and have my EquipComparsion script instlled, set to true and
-    # this script will use EECI's settings instead of the one in this script
-    UseEECITable = false
-  end
-
-  
-  if !defined?(COMP::EECI) || !ShopItemStatusPlus::UseEECITable
-  # Edit the stuff below if you don't have my EquipComparsion script, otherwise
-  # just edit the variables in EECI script 
-  module ShopItemStatusPlus
-    #--------------------------------------------------------------------------
-    # * Constants (Features) from Game_BattlerBase
-    # * Don't edit this unless you know what you're doing
-    #--------------------------------------------------------------------------
-    FEATURE_ELEMENT_RATE    =   Game_BattlerBase::FEATURE_ELEMENT_RATE    # Element Rate
-    FEATURE_DEBUFF_RATE     =   Game_BattlerBase::FEATURE_DEBUFF_RATE     # Debuff Rate
-    FEATURE_STATE_RATE      =   Game_BattlerBase::FEATURE_STATE_RATE      # State Rate
-    FEATURE_STATE_RESIST    =   Game_BattlerBase::FEATURE_STATE_RESIST    # State Resist
-    FEATURE_PARAM           =   Game_BattlerBase::FEATURE_PARAM           # Parameter
-    FEATURE_XPARAM          =   Game_BattlerBase::FEATURE_XPARAM          # Ex-Parameter
-    FEATURE_SPARAM          =   Game_BattlerBase::FEATURE_SPARAM          # Sp-Parameter
-    FEATURE_ATK_ELEMENT     =   Game_BattlerBase::FEATURE_ATK_ELEMENT     # Atk Element
-    FEATURE_ATK_STATE       =   Game_BattlerBase::FEATURE_ATK_STATE       # Atk State
-    FEATURE_ATK_SPEED       =   Game_BattlerBase::FEATURE_ATK_SPEED       # Atk Speed
-    FEATURE_ATK_TIMES       =   Game_BattlerBase::FEATURE_ATK_TIMES       # Atk Times+
-    FEATURE_STYPE_ADD       =   Game_BattlerBase::FEATURE_STYPE_ADD       # Add Skill Type
-    FEATURE_STYPE_SEAL      =   Game_BattlerBase::FEATURE_STYPE_SEAL      # Disable Skill Type
-    FEATURE_SKILL_ADD       =   Game_BattlerBase::FEATURE_SKILL_ADD       # Add Skill
-    FEATURE_SKILL_SEAL      =   Game_BattlerBase::FEATURE_SKILL_SEAL      # Disable Skill
-    FEATURE_EQUIP_WTYPE     =   Game_BattlerBase::FEATURE_EQUIP_WTYPE     # Equip Weapon
-    FEATURE_EQUIP_ATYPE     =   Game_BattlerBase::FEATURE_EQUIP_ATYPE     # Equip Armor
-    FEATURE_EQUIP_FIX       =   Game_BattlerBase::FEATURE_EQUIP_FIX       # Lock Equip
-    FEATURE_EQUIP_SEAL      =   Game_BattlerBase::FEATURE_EQUIP_SEAL      # Seal Equip
-    FEATURE_SLOT_TYPE       =   Game_BattlerBase::FEATURE_SLOT_TYPE       # Slot Type
-    FEATURE_ACTION_PLUS     =   Game_BattlerBase::FEATURE_ACTION_PLUS     # Action Times+
-    FEATURE_SPECIAL_FLAG    =   Game_BattlerBase::FEATURE_SPECIAL_FLAG    # Special Flag
-    FEATURE_COLLAPSE_TYPE   =   Game_BattlerBase::FEATURE_COLLAPSE_TYPE   # Collapse Effect
-    FEATURE_PARTY_ABILITY   =   Game_BattlerBase::FEATURE_PARTY_ABILITY   # Party Ability
-    # ---Feature Flags---
-    FLAG_ID_AUTO_BATTLE     =   Game_BattlerBase::FLAG_ID_AUTO_BATTLE     # auto battle
-    FLAG_ID_GUARD           =   Game_BattlerBase::FLAG_ID_GUARD           # guard
-    FLAG_ID_SUBSTITUTE      =   Game_BattlerBase::FLAG_ID_SUBSTITUTE      # substitute
-    FLAG_ID_PRESERVE_TP     =   Game_BattlerBase::FLAG_ID_PRESERVE_TP     # preserve TP
+    include CRDE::RPG::Features
+    include CRDE::RPG::EquipInfo
     #=====================================================================#
     # *                     v Free to Edit v                              #
     #=====================================================================#
@@ -115,329 +74,54 @@ module COMP
     #---------------------------------------------------------------------
     Key_nextpage   = :RIGHT
     Key_lastpage   = :LEFT
-    #---------------------------------------------------------------------
-    # * Id for standard param, chances are no need to edits
-    FeatureNormalParam = -1
-    #---------------------------------------------------------------------
-    # * The param/feature to show
-    ComparisonTable = {        
-      #    better not touch      edit the text for your need
-      #    ↓              ↓                 ↓       
-      # symbol        => [id,  display group text showed in comparison]
+    # Text displayed when nothing to show
+    NothingText = "No Specials"
 
-      # :param          => [FeatureNormalParam, ''],                  # Basic parameter
-      :xparam         => [FEATURE_XPARAM, ''],                      # Ex-Parameter
-      :sparam         => [FEATURE_SPARAM, ''],                      # Sp-Parameter
-
-      :param_rate     => [FEATURE_PARAM, 'Param multipler'],        # Parameter
-      :special_flag   => [FEATURE_SPECIAL_FLAG, 'Special'],         # Special feature flag
-      :element_rate   => [FEATURE_ELEMENT_RATE, 'Element Rate'],    # Element Rate
-      :debuff_rate    => [FEATURE_DEBUFF_RATE, 'Debuff Rate'],      # Debuff Rate
-      :state_rate     => [FEATURE_STATE_RATE, 'State Rate'],        # State Rate
-      :state_resist   => [FEATURE_STATE_RESIST, 'State Resist'],    # State Resist
-      :atk_element    => [FEATURE_ATK_ELEMENT, 'Atk Element'],      # Atk Element
-      :atk_state      => [FEATURE_ATK_STATE, 'Atk State'],          # Atk State
-      :atk_speed      => [FEATURE_ATK_SPEED, 'Feature'],            # Atk Speed
-      :atk_times      => [FEATURE_ATK_TIMES, 'Feature'],            # Atk Times+
-      :stype_add      => [FEATURE_STYPE_ADD, 'Add Skill Type'],     # Add Skill Type
-      :stype_seal     => [FEATURE_STYPE_SEAL, 'Disable Skill Type'],# Disable Skill Type
-      :skill_add      => [FEATURE_SKILL_ADD, 'Add Skill'],          # Add Skill
-      :skill_seal     => [FEATURE_SKILL_SEAL, 'Disable Skill'],     # Disable Skill
-      :equip_wtype    => [FEATURE_EQUIP_WTYPE, 'Equip Weapon'],     # Equip Weapon
-      :equip_atype    => [FEATURE_EQUIP_ATYPE, 'Equip Armor'],      # Equip Armor
-      :equip_fix      => [FEATURE_EQUIP_FIX, 'Lock Equip'],         # Lock Equip
-      :equip_seal     => [FEATURE_EQUIP_SEAL, 'Seal Equip'],        # Seal Equip
-      :action_plus    => [FEATURE_ACTION_PLUS, 'Action Times+'],    # Action Times+
-      :party_ability  => [FEATURE_PARTY_ABILITY, 'Party ability'],  # Party ability
-
-      # kinda useless, so I didn't implement it.
-      # :slot_type      => [FEATURE_SLOT_TYPE, 'Slot Type'],          # Slot Type
-    }
-    #---------------------------------------------------------------------
-    MISC_text = 'Other' # the group text not in this order list
-    #---------------------------------------------------------------------
-    # * Display order of comparison group text, upper one displayed first
-    TextDisplayOrder = [
-      '',         # suggestion: better not touch this line
-      'Feature',
-      'Special',
-      'Param multipler',
-      'Element Rate',
-      'Debuff Rate',
-      'State Rate',
-      'State Resist',
-      'Atk Element',
-      'Atk State',
-      'Atk Speed',
-      'Atk Times+',
-      'Add Skill Type',
-      'Disable Skill Type',
-      'Add Skill',
-      'Disable Skill',
-      'Equip Weapon',
-      'Equip Armor',
-      'Lock Equip',
-      'Seal Equip',
-      'Slot Type',
-      'Action Times+',
-      'Party ability',
-      MISC_text,
-    ]
-    #---------------------------------------------------------------------
-    # * Name display for each xparam
-    XParamName = {
-      0   => "HIT",  # HIT rate
-      1   => "EVA",  # EVAsion rate
-      2   => "CRI",  # CRItical rate
-      3   => "CEV",  # Critical EVasion rate
-      4   => "MEV",  # Magic EVasion rate
-      5   => "MRF",  # Magic ReFlection rate
-      6   => "CNT",  # CouNTer attack rate
-      7   => "HRG",  # Hp ReGeneration rate
-      8   => "MRG",  # Mp ReGeneration rate
-      9   => "TRG",  # Tp ReGeneration rate
-    }
-    #---------------------------------------------------------------------
-    # * Name display for each sparam
-    SParamName = {
-      0   => "TGR",  # TarGet Rate
-      1   => "GRD",  # GuaRD effect rate
-      2   => "REC",  # RECovery effect rate
-      3   => "PHA",  # PHArmacology
-      4   => "MCR",  # Mp Cost Rate
-      5   => "TCR",  # Tp Charge Rate
-      6   => "PDR",  # Physical Damage Rate
-      7   => "MDR",  # Magical Damage Rate
-      8   => "FDR",  # Floor Damage Rate
-      9   => "EXR",  # EXperience Rate
-    }
-    #---------------------------------------------------------------------
-    # * Name display for party ability
-    PartyAbilityName = {
-      0   => "Encounter Half",          # halve encounters
-      1   => "Encounter None",          # disable encounters
-      2   => "Cancel Surprise",         # disable surprise
-      3   => "Raise Preemptive",        # increase preemptive strike rate
-      4   => "Gold Double",             # double money earned
-      5   => "Item Drop Rate Double",   # double item acquisition rate
-    }
-    #---------------------------------------------------------------------
-    # * Name display for special feature
-    SpecialFeatureName = {
-      0 => "Auto Battle",
-      1 => "Guard",
-      2 => "Substitute",
-      3 => "Preserve TP",
-    }
     #--------------------------------------------------------------------------
-    # * Feature name displayed at first of the line, before value comparison
-    OtherFeatureName = {
-      # feature id        => display name
-      FEATURE_ATK_SPEED   => 'ASP',
-      FEATURE_ATK_TIMES   => 'ATS+',
-      FEATURE_ACTION_PLUS => '+%d:',
-    }
-    #---------------------------------------------------------------------
-    # * prefix of single feature comparison
-    FeatureAddText     = "+" + " %s"
-    FeatureRemoveText  = "-" + " %s"
-    FeatureEnableText  = "√" + " %s"
-    FeatureDisableText = "X" + " %s"
-    #---------------------------------------------------------------------
-    # * The feature id that is actually not good
-    InverseColorFeature = [
-      FEATURE_STYPE_SEAL, FEATURE_SKILL_SEAL, FEATURE_EQUIP_FIX,
-      FEATURE_EQUIP_SEAL, FEATURE_ELEMENT_RATE,
-    ]
-    #---------------------------------------------------------------------
-    # * The value of given feature id will disaply as percent
-    PercentageFeaure = [
-      FEATURE_ELEMENT_RATE, FEATURE_DEBUFF_RATE, FEATURE_STATE_RATE,
-      FEATURE_PARAM, FEATURE_XPARAM, FEATURE_SPARAM, FEATURE_ATK_STATE,
-      FEATURE_ACTION_PLUS,
+    # * Features that considered to compare
+    ComparisonList = [
+      # :param,
+      :xparam,
+      :sparam,
+      :param_rate,
+      :special_flag,
+      :element_rate,
+      :debuff_rate,
+      :state_rate,
+      :state_resist,
+      :atk_element,
+      :atk_state,
+      :atk_speed,
+      :atk_times,
+      :stype_add,
+      :stype_seal,
+      :skill_add,
+      :skill_seal,
+      :equip_wtype,
+      :equip_atype,
+      :equip_fix,
+      :equip_seal,
+      :action_plus,
+      :party_ability
     ]
     #=====================================================================#
     # Please don't edit anything below unless you know what you're doing! #
     #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^#
-    # Strcuture holds compare result of each difference
-    DiffInfo = Struct.new(:feature_id, :data_id, :value, :display_str, :group_text)
-    # :feature_id  > what do you expect me to say?
-    # :data_id     > data id in grouped feature, such as param
-    # :delta       > value changed of that feature, in certain feature id is:
-    #   true/false = add/remove after equip
-    #
-    # :display_str > Other text displayed
-    # :group_text  > even need to explain?
-
-    # Uses to fill the small blanks where not proper to write more lines
-    DummyInfo = DiffInfo.new(nil, nil, nil, '')
-    #--------------------------------------------------------------------------
-    # * Mapping table for easier query
-    StringTable     = {}   # feature_id => group_text
-    FeatureIdTable  = {}   # group_text => feature_id
-    DisplayOrder    = {}   # group_text => order
-    DisplayIdOrder  = {}   # feature_id => order
-
-    ComparisonTable.each do |symbol, info|
-      StringTable[info[0]] = info[1]
-      FeatureIdTable[info[1]] = info[0]
+    ComparisonTable = {}
+    ComparisonList.each do |key|
+      ComparisonTable[key] = ParamNameTable[key]
     end
-    TextDisplayOrder.each_with_index do |str, i|
-      DisplayOrder[str] = i
-      DisplayIdOrder[FeatureIdTable[str]] = i
-    end
-  end # module SISP
-  # include the constants if EECI imported
-  else
-    module ShopItemStatusPlus
-      include COMP::EECI
-    end
+    
+    Dummy = ::RPG::Weapon.new
+    Dummy.features.clear
   end
 end
 
-if COMP::ShopItemStatusPlus::Enable
-#==========================================================================
-# ** RPG::BaseItem
-#==========================================================================
-class RPG::BaseItem
-  FEATURE_ACTION_PLUS   = 61              # Action Times+
-  FEATURE_SPECIAL_FLAG  = 62              # Special Flag
-  FEATURE_PARTY_ABILITY = 64              # Party Ability
-  #--------------------------------------------------------------------------
-  # * Get Feature Object Array (Feature Codes Limited)
-  #--------------------------------------------------------------------------
-  def features(code = nil)
-    return @features if code.nil?
-    @features.select {|ft| ft.code == code }
-  end
-  #--------------------------------------------------------------------------
-  # * Get Feature Object Array (Feature Codes and Data IDs Limited)
-  #--------------------------------------------------------------------------
-  def features_with_id(code, id)
-    @features.select {|ft| ft.code == code && ft.data_id == id }
-  end
-  #--------------------------------------------------------------------------
-  # * Calculate Complement of Feature Values
-  #--------------------------------------------------------------------------
-  def features_pi(code, id)
-    result = features_with_id(code, id).inject(1.0){ |r, ft|
-      r *= (ft.value == 0.0) ? 0.0000001 : ft.value
-    }
-  end
-  #--------------------------------------------------------------------------
-  # * Calculate Sum of Feature Values (Specify Data ID)
-  #--------------------------------------------------------------------------
-  def features_sum(code, id)
-    features_with_id(code, id).inject(0.0) {|r, ft| r += ft.value }
-  end
-  #--------------------------------------------------------------------------
-  # * Calculate Sum of Feature Values (Data ID Unspecified)
-  #--------------------------------------------------------------------------
-  def features_sum_all(code)
-    features(code).inject(0.0) {|r, ft| r += ft.value }
-  end
-  #--------------------------------------------------------------------------
-  # * Calculate Set Sum of Features
-  #--------------------------------------------------------------------------
-  def features_set(code)
-    features(code).inject([]) {|r, ft| r |= [ft.data_id] }
-  end
-  #--------------------------------------------------------------------------
-  # * Get Array of Additional Action Time Probabilities
-  #--------------------------------------------------------------------------
-  def action_plus_set
-    features(FEATURE_ACTION_PLUS).collect {|ft| ft.value }
-  end
-  #--------------------------------------------------------------------------
-  # * Determine if Special Flag
-  #--------------------------------------------------------------------------
-  def special_flag(flag_id)
-    features(FEATURE_SPECIAL_FLAG).any? {|ft| ft.data_id == flag_id }
-  end
-  #--------------------------------------------------------------------------
-  # * Determine Party Ability
-  #--------------------------------------------------------------------------
-  def party_ability(ability_id)
-    features(FEATURE_PARTY_ABILITY).any? {|ft| ft.data_id == ability_id }
-  end
-  #--------------------------------------------------------------------------
-end
-#==============================================================================
-# ** RPG::EquipItem
-#==============================================================================
-class RPG::EquipItem < RPG::BaseItem
-  #---------------------------------------------------------------------------
-  def param(id)
-    return @params[id]
-  end
-  #---------------------------------------------------------------------------
-end
-#==============================================================================
-# ** Sprite
-#==============================================================================
-class Sprite
-  #---------------------------------------------------------------------------
-  def show
-    self.visible = true
-    self
-  end
-  #---------------------------------------------------------------------------
-  def hide
-    self.visible = false
-    self
-  end
-  #---------------------------------------------------------------------------
-  def visible?
-    return self.visible
-  end
-  #---------------------------------------------------------------------------
-end
-#==============================================================================
-# ** Window_Base
-#==============================================================================
-class Window_Base < Window
-  #---------------------------------------------------------------------------
-  def active?
-    return self.active
-  end
-  #---------------------------------------------------------------------------
-  def visible?
-    return self.visible
-  end
-  #---------------------------------------------------------------------------
-end
-#==============================================================================
-# ■ Game_BattlerBase
-#==============================================================================
-class Game_BattlerBase
-  #--------------------------------------------------------------------------
-  # * Overwrite: features_pi with zero dirty hack
-  #--------------------------------------------------------------------------
-  def features_pi(code, id)
-    features_with_id(code, id).inject(1.0) {|r, ft|
-      r *= (ft.value == 0.0) ? 0.0000001 : ft.value
-    }
-  end
-end
-#==============================================================================
-# ** Module of this script
-#==============================================================================
-module COMP::ShopItemStatusPlus
-  #--------------------------------------------------------------------------
-  # * Dummy equipment for which compare side is nil
-  Dummy = RPG::Weapon.new
-  Dummy.features.clear
-end
-#==============================================================================
-# ** Scene_Shop
-#==============================================================================
-class Scene_Shop < Scene_MenuBase
-end
 #==============================================================================
 # ** Window_ShopStatus
 #==============================================================================
 class Window_ShopStatus < Window_Base
-  include COMP::ShopItemStatusPlus
+  include CRDE::ShopItemStatusPlus
   #---------------------------------------------------------------------------
   # * Instance variables
   #---------------------------------------------------------------------------
@@ -994,5 +678,3 @@ class Window_ShopStatus < Window_Base
   end
   #---------------------------------------------------------------------------
 end
-
-end # if script enabled
