@@ -988,6 +988,16 @@ class Window_EquipStatus < Window_Base
     change_color(normal_color)
   end
   #---------------------------------------------------------------------------
+  def inverse_color?(feature_id, data_id)
+    return true if InverseColorFeature.include?(feature_id)
+    if feature_id == FEATURE_STATE_RATE
+      return true if !InverseColorStateID.include?(data_id)
+    elsif feature_id == FEATURE_STATE_RESIST
+      return true if InverseColorStateID.include?(data_id)
+    end
+    return false
+  end
+  #---------------------------------------------------------------------------
   # * Overwrite: draw_item
   #---------------------------------------------------------------------------
   def draw_item(dx, dy, info)
@@ -1001,10 +1011,8 @@ class Window_EquipStatus < Window_Base
     if info.value == true || info.value == false
       a = (info.value ? 1 : 0)
       b = (info.value ? 0 : 1)
-      # Inverse the color effect if feature is not good
-      inverse = InverseColorFeature.include?(info.feature_id)
       
-      if inverse
+      if inverse_color?(info.feature_id, info.data_id)
         a ^= 1; b ^= 1;
       end
       
@@ -1062,7 +1070,7 @@ class Window_EquipStatus < Window_Base
     draw_diff_value(crect, value[1], is_percent) if @comparing
     draw_right_arrow(drx, dy)                    if @comparing
     delta = value[0] - value[1]
-    delta *= -1 if InverseColorFeature.include?(info.feature_id)
+    delta *= -1 if inverse_color?(info.feature_id, info.data_id)
     change_color(param_change_color(delta))
     draw_diff_value(nrect, value[0], is_percent)
     change_color(normal_color)
