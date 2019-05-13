@@ -2,7 +2,7 @@
 #   EECI Patch - Skill Description                                            #
 #   Version: 1.0.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2018.05.08                                                   #  
+#   Last update: 2018.05.13                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported[:CRDE_EECISKDEC] = true
@@ -10,7 +10,7 @@ $imported[:CRDE_EECISKDEC] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
-# -- 2019.05.08: Start the script and completed                               #
+# -- 2019.05.13: Start the script and completed                               #
 #                                                                             #
 #=============================================================================#
 #                       ** End-User License Agreement **                      #
