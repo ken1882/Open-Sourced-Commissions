@@ -1,8 +1,8 @@
 #=============================================================================#
 #   Extended Equipment Comparison Info                                        #
-#   Version: 1.2.2                                                            #  
+#   Version: 1.2.3                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2019.05.06                                                   #  
+#   Last update: 2019.05.13                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported[:CRDE_EECI] = true
@@ -10,6 +10,7 @@ $imported[:CRDE_EECI] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2019.05.13: Add more inverse color options                               #
 # -- 2019.05.06: Current features ignore skills added by actor/class object   #
 # -- 2019.05.06: Add CRDE dependency                                          #
 # -- 2018.10.29: Fix divided by zero error                                    #
