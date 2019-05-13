@@ -1,6 +1,6 @@
 #=============================================================================#
 #   EECI Patch - Skill Description                                            #
-#   Version: 1.0.0                                                            #  
+#   Version: 1.0.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2018.05.13                                                   #  
 #=============================================================================#
@@ -41,6 +41,8 @@ $imported[:CRDE_EECISKDEC] = true
 # window it will shows the description of the tagged skill and also be able   #
 # to linewrap.                                                                #
 # Will only work if you have proper script installed, such as EECI.           #
+#        Add this to the note box of the skill, with a new line:              #
+#                               <diff desc>                                   #
 #=============================================================================#
 #                            ** Compatibility **                              #
 #-----------------------------------------------------------------------------#

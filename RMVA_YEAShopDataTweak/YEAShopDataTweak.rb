@@ -1,6 +1,6 @@
 #=============================================================================#
 #   YEA Shop Data Tweak Patch                                                 #
-#   Version: 1.0.0                                                            #  
+#   Version: 1.0.1                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2019.05.13                                                   #  
 #=============================================================================#
@@ -59,11 +59,9 @@ end
 module CRDE
   module YEAShopDataTweak
 
-    # Text display when item performance is greater than current one
-    PerformanceUpText   = "▲"
-    PerformanceDownText = "▼"     # when lesser
-    PerformanceEqText   = "="     # when equal
-    UnavailableText     = "-"     # when unable to use/equip
+    # If true, the equippable actor's name will changing its color response
+    # to performance change of the equipment
+    PerformanceChangeColor = false
   end
 end
 #==============================================================================
@@ -72,49 +70,43 @@ end
 class Window_ShopData < Window_Base
   include CRDE::YEAShopDataTweak
   #--------------------------------------------------------------------------
+  def col_max
+    return 3
+  end
+  #--------------------------------------------------------------------------
+  def row_max
+    return 4
+  end
+  #--------------------------------------------------------------------------
   # * Overwrite: draw_item_stats
   #--------------------------------------------------------------------------
   def draw_item_stats
     return unless @item.is_a?(RPG::Weapon) || @item.is_a?(RPG::Armor)
     dx = 96; dy = 0
-    dw = (contents.width - 96) / 2
-    n = [$game_party.members.size, 8].min
+    dw = (contents.width - 96) / col_max
+    n = [$game_party.members.size, col_max * row_max].min
     n.times do |i|
-      draw_actor_equip_info($game_party.members[i], dx, dy, dw)
-      dx = dx >= 96 + dw ? 96 : 96 + dw
-      dy += line_height if dx == 96
+      sx = dx + (i % col_max) * dw
+      sy = (i / col_max) * line_height
+      draw_actor_equip_info($game_party.members[i], sx, sy, dw)
     end
   end
   #--------------------------------------------------------------------------
   # * overwrite method: draw_actor_equip_info
   #--------------------------------------------------------------------------
   def draw_actor_equip_info(actor, dx, dy, dw)
-    enabled = actor.equippable?(@item)
     draw_background_box(dx, dy, dw)
-    change_color(normal_color, enabled)
-    draw_text(dx, dy, dw, line_height, ' ' + actor.name)
     item1 = current_equipped_item(actor, @item.etype_id)
     delta = (@item.performance rescue 0) - (item1.performance rescue 0)
-    draw_equipment_performance_change(dx, dy, dw, actor, delta, enabled)
+    enabled = actor.equippable?(@item)
+    performance_change_color(delta, enabled)
+    draw_text(dx + 2, dy, dw - 2, line_height, actor.name)
+    change_color(normal_color, enabled)
   end
   #--------------------------------------------------------------------------
-  def draw_equipment_performance_change(dx, dy, dw, actor, delta, enabled=true)
-    puts "#{dx} #{dy} #{dw} #{actor.name} #{item1.performance rescue -1}"
-    if enabled
-      if delta == 0
-        txt = PerformanceEqText
-      elsif delta > 0
-        txt = PerformanceUpText
-        change_color(param_change_color(1))
-      else
-        txt = PerformanceDownText
-        change_color(param_change_color(-1))
-      end
-    else
-      txt = UnavailableText
-    end
-    txt += ' '
-    draw_text(dx, dy, dw, line_height, txt, 2)
+  def performance_change_color(delta, enabled)
+    clr = PerformanceChangeColor && enabled ? param_change_color(delta) : normal_color
+    change_color(clr, enabled)
   end
   #--------------------------------------------------------------------------
   def draw_background_box(dx, dy, dw)
