@@ -1000,10 +1000,15 @@ class Window_EquipStatus < Window_Base
   #---------------------------------------------------------------------------
   def inverse_color?(feature_id, data_id)
     return true if InverseColorFeature.include?(feature_id)
-    if feature_id == FEATURE_STATE_RATE
+    case feature_id
+    when FEATURE_STATE_RATE
       return true if !InverseColorStateID.include?(data_id)
-    elsif feature_id == FEATURE_STATE_RESIST
+    when FEATURE_STATE_RESIST
       return true if InverseColorStateID.include?(data_id)
+    when FEATURE_SKILL_SEAL
+      return true if !InverseColorSkillID.include?(data_id)
+    when FEATURE_SKILL_ADD
+      return true if InverseColorSkillID.include?(data_id)
     end
     return false
   end
