@@ -1,8 +1,8 @@
 #=============================================================================#
 #   Extended Equipment Comparison Info                                        #
-#   Version: 1.2.3                                                            #  
+#   Version: 1.2.4                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2019.05.13                                                   #  
+#   Last update: 2021.09.07                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported[:CRDE_EECI] = true
@@ -10,6 +10,7 @@ $imported[:CRDE_EECI] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2021.09.07: Add more inverse color and no color option                   #
 # -- 2019.05.13: Add more inverse color options                               #
 # -- 2019.05.06: Current features ignore skills added by actor/class object   #
 # -- 2019.05.06: Add CRDE dependency                                          #
@@ -1010,6 +1011,21 @@ class Window_EquipStatus < Window_Base
       return true if !InverseColorSkillID.include?(data_id)
     when FEATURE_SKILL_ADD
       return true if InverseColorSkillID.include?(data_id)
+    when FEATURE_XPARAM
+      return true if InverseColorXParam.include?(data_id)
+    when FEATURE_SPARAM
+      return true if InverseColorSParam.include?(data_id)
+    end
+    return false
+  end
+  #---------------------------------------------------------------------------
+  def no_color?(feature_id, data_id)
+    return true if NoColorFeature.include?(feature_id)
+    case feature_id
+    when FEATURE_XPARAM
+      return true if NoColorXParam.include?(data_id)
+    when FEATURE_SPARAM
+      return true if NoColorSParam.include?(data_id)
     end
     return false
   end
@@ -1030,8 +1046,10 @@ class Window_EquipStatus < Window_Base
       
       if inverse_color?(info.feature_id, info.data_id)
         a ^= 1; b ^= 1;
+      elsif no_color?(info.feature_id, info.data_id)
+        a = 0; b = 0;
       end
-      
+
       change_color(param_change_color(a - b))
 
       # draw skill change with the icon
@@ -1087,6 +1105,7 @@ class Window_EquipStatus < Window_Base
     draw_right_arrow(drx, dy)                    if @comparing
     delta = value[0] - value[1]
     delta *= -1 if inverse_color?(info.feature_id, info.data_id)
+    delta = 0   if no_color?(info.feature_id, info.data_id)
     change_color(param_change_color(delta))
     draw_diff_value(nrect, value[0], is_percent)
     change_color(normal_color)
