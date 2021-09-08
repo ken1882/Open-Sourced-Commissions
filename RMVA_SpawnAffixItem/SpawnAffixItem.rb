@@ -94,6 +94,10 @@ module COMP
     # an item, may cause issues
     AllowMultipleAffixes = true
     
+    #=====================================================================#
+    # Please don't edit anything below unless you know what you're doing! #
+    #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^#
+
     # Defined in Hime's script
     InstanceAttrs = [
       :name, :params, :price, :features, :note, :icon_index, 
@@ -101,9 +105,6 @@ module COMP
     ]
   end
 end
-#=====================================================================#
-# Please don't edit anything below unless you know what you're doing! #
-#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^#
 #==============================================================================
 # ** Game_Party
 #==============================================================================
@@ -153,6 +154,25 @@ module DataManager
 
 end # DataManager
 end # if use template shifter
+#===============================================================================
+# > Define multi-affix attributes if enabled
+#   The attributes are used to track applied affix effects
+if COMP::SpawnAffixItem::AllowMultipleAffixes
+#===============================================================================
+# ** RPG::EquipItem
+#===============================================================================
+class RPG::EquipItem
+  attr_accessor :prefix_id_multi
+  attr_accessor :suffix_id_multi
+end
+#===============================================================================
+# ** RPG::Item
+#===============================================================================
+class RPG::Item
+  attr_accessor :prefix_id_multi
+  attr_accessor :suffix_id_multi
+end
+end
 #==============================================================================
 # ** Module from Hime's script
 #==============================================================================
@@ -232,8 +252,14 @@ if COMP::SpawnAffixItem::UseTemplateShifter
   #------------------------------------------------------------------------------
   def extend_affix_effect(item, pfid, sfid)
     alter_template! do |tmp_item|
-      tmp_item.prefix_id = pfid if pfid > 0
-      tmp_item.suffix_id = sfid if sfid > 0
+      if pfid > 0
+        tmp_item.prefix_id = pfid 
+        tmp_item.prefix_id_multi = (tmp_item.prefix_id_multi || []) << sfid
+      end
+      if sfid > 0
+        tmp_item.suffix_id = sfid
+        tmp_item.suffix_id_multi = (tmp_item.suffix_id_multi || []) << sfid
+      end
     end
   end
 #------------------------------------------------------------------------------
@@ -245,8 +271,14 @@ else
   def extend_affix_effect(item, pfid, sfid)
     item = make_full_copy(item)
     convert2stackable_instance!(item)
-    item.prefix_id = pfid if pfid > 0
-    item.suffix_id = sfid if sfid > 0
+    if pfid > 0
+      item.prefix_id = pfid 
+      item.prefix_id_multi = (tmp_item.prefix_id_multi || []) << sfid
+    end
+    if sfid > 0
+      item.suffix_id = sfid
+      item.suffix_id_multi = (tmp_item.suffix_id_multi || []) << sfid
+    end
     item
   end
   #------------------------------------------------------------------------------
