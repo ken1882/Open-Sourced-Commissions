@@ -124,12 +124,14 @@ end
 #==============================================================================
 # ** Check script availability
 #==============================================================================
-if COMP::SpawnAffixItem::Enabled && (!$imported["TH_InstanceItems"] || !$imported[:TH_ItemAffixes])
-  msgbox %{[WARNING] Hime's instance and affix item scripts are missing, SpawnAffixItem script will be disalbed.
-  Please make sure the scripts is placed in right order!
-  (place SpawnAffix sciprt after Hime's Instance/Affix item script)
-  }
-else
+if COMP::SpawnAffixItem::Enabled
+  if !$imported["TH_InstanceItems"] || !$imported[:TH_ItemAffixes]
+    msgbox %{[WARNING] Hime's instance and affix item scripts are missing, SpawnAffixItem script will be disalbed.
+    Please make sure the scripts is placed in right order!
+    (place SpawnAffix sciprt after Hime's Instance/Affix item script)
+    }
+    exit
+  end
 #==============================================================================
 # ** DataManager
 # ----------------------------------------------------------------------------
@@ -142,11 +144,15 @@ module DataManager
     attr_reader :primitive_weapons
     attr_reader :primitive_armors
 
-    alias :comp_insitem_primitive_load_database :load_database
+    alias :comp_insitem_primitive_init :init
   end
 
-  def self.load_database
-    comp_insitem_primitive_load_database
+  def self.init
+    comp_insitem_primitive_init
+    clone_primitive_data
+  end
+
+  def self.clone_primitive_data
     @primitive_items   = Marshal.load(Marshal.dump($data_items))
     @primitive_weapons = Marshal.load(Marshal.dump($data_weapons))
     @primitive_armors  = Marshal.load(Marshal.dump($data_armors))
@@ -177,41 +183,58 @@ end
 # ** Module from Hime's script
 #==============================================================================
 module InstanceManager
+  AllowMultipleAffixes = COMP::SpawnAffixItem::AllowMultipleAffixes
+  UseTemplateShifter   = COMP::SpawnAffixItem::UseTemplateShifter
+#===============================================================================
+# * Check multi-affixies available
+if AllowMultipleAffixes
+  #-----------------------------------------------------------------------------
+  # * Alias method: setup equip instance then apply multi-affix, if available
+  #-----------------------------------------------------------------------------
+  class << self; alias multi_affix_equip_setup setup_equip_instance; end
+  def self.setup_equip_instance(obj)
+    multi_affix_equip_setup(obj)
+    pfids = (obj.prefix_id_multi || []).dup 
+    sfids = (obj.suffix_id_multi || []).dup
+    obj.prefix_id_multi = obj.suffix_id_multi = []
+    if UseTemplateShifter
+      extend_affix_effect!(obj, pfids, sfids)
+      restore_template(obj)
+    else
+      extend_affix_effect(obj, pfids, sfids)
+    end
+  end
+end # if multi-affixies available
   #------------------------------------------------------------------------------
   # * New method: spawn item with prefix/suffix
   #------------------------------------------------------------------------------
-  def spawn_affix_item(tmp_item, prefix=nil, suffix=nil)
-    $game_party.gain_item(tmp_item, 1)
-    ins_item = $game_party.find_instance_item(tmp_item, true)
-    [prefix || 0].flatten.each do |pid|
-      next if pid == 0
-      if COMP::SpawnAffixItem::AllowMultipleAffixes
-        extend_affix_effect(tmp_item, pid, 0)
+  def self.spawn_affix_item(tmp_item, prefix=nil, suffix=nil)
+    item = nil
+    pids = [prefix || 0].flatten
+    sids = [suffix || 0].flatten
+    if AllowMultipleAffixes
+      if UseTemplateShifter
+        item = extend_affix_effect!(tmp_item, pids, sids, false)
       else
-        ins_item.prefix_id = pid
+        item = extend_affix_effect(tmp_item, pids, sids, false)
       end
+    else
+      item = get_instance(tmp_item)
+      item.prefix_id = pids.first
+      item.suffix_id = sids.first
     end
-    [suffix || 0].flatten.each do |sid|
-      next if sid == 0
-      if COMP::SpawnAffixItem::AllowMultipleAffixes
-        extend_affix_effect(tmp_item, 0, sid)
-      else
-        ins_item.suffix_id = sid
-      end
-    end
-    return ins_item unless COMP::SpawnAffixItem::UseTemplateShifter
-    ret = make_full_copy(ins_item)
-    restore_template(tmp_item)
-    return ret
+    $game_party.gain_item(item, 1)
+    restore_template(item) if UseTemplateShifter
+    return item
   end
 #------------------------------------------------------------------------------
 # * This part of code are considered hacky, but perhaps compatible with more
 #   scripts because are accessing $data_xxxxx directly
-if COMP::SpawnAffixItem::UseTemplateShifter
   #------------------------------------------------------------------------------
   # * New method: Get primitive item
   #------------------------------------------------------------------------------
   def self.get_primitive_item(tmp_item)
+    return InstanceManager.get_template(tmp_item) unless UseTemplateShifter
     id = tmp_item.template_id
     return DataManager.primitive_items[id]    if tmp_item.is_a?(RPG::Item)
     return DataManager.primitive_weapons[id]  if tmp_item.is_a?(RPG::Weapon)
@@ -222,6 +245,7 @@ if COMP::SpawnAffixItem::UseTemplateShifter
   #     The given block should accept first param as the template item
   #------------------------------------------------------------------------------
   def self.alter_template!(item, &block)
+    return item unless UseTemplateShifter
     block.call(get_template(item))
   end
   #------------------------------------------------------------------------------
@@ -229,16 +253,20 @@ if COMP::SpawnAffixItem::UseTemplateShifter
   #     The given block should accept first param as the template item
   #------------------------------------------------------------------------------
   def self.alter_template(item, &block)
-    block.call(get_template(item))
+    return item unless UseTemplateShifter
+    ret = block.call(get_template(item))
     restore_template(item)
+    ret
   end
   #------------------------------------------------------------------------------
   # * New method: Restore template item to its primitive state
   #------------------------------------------------------------------------------
   def self.restore_template(item)
     pitem = get_primitive_item(item)
+    return pitem unless UseTemplateShifter
     tid   = item.template_id
     return unless pitem
+    pitem = make_full_copy(pitem)
     if item.is_a?(RPG::Item)
       $data_items[tid] = pitem
     elsif item.is_a?(RPG::Weapon)
@@ -247,51 +275,74 @@ if COMP::SpawnAffixItem::UseTemplateShifter
       $data_armors[tid] = pitem
     end 
   end
+#------------------------------------------------------------------------------
+# > Only needed if multiple affixies enabled
+if AllowMultipleAffixes
   #------------------------------------------------------------------------------
   # * New method: Extend affix effect on given item (hacky)
   #------------------------------------------------------------------------------
-  def extend_affix_effect(item, pfid, sfid)
-    alter_template! do |tmp_item|
-      if pfid > 0
-        tmp_item.prefix_id = pfid 
-        tmp_item.prefix_id_multi = (tmp_item.prefix_id_multi || []) << sfid
+  def self.extend_affix_effect!(item, pfids, sfids, refresh=true)
+    pfids = [pfids || 0].flatten
+    sfids = [sfids || 0].flatten
+    ret   = nil
+    alter_template!(item) do |tmp_item|
+      tmp_item.prefix_id_multi = (tmp_item.prefix_id_multi || [])
+      tmp_item.suffix_id_multi = (tmp_item.suffix_id_multi || [])
+      pfids.each do |pid|
+        next if pid == 0
+        tmp_item.prefix_id = pid unless refresh
+        tmp_item.prefix_id_multi << pid
       end
-      if sfid > 0
-        tmp_item.suffix_id = sfid
-        tmp_item.suffix_id_multi = (tmp_item.suffix_id_multi || []) << sfid
+      tmp_item.prefix_id = 0
+      sfids.each do |sid|
+        next if sid == 0
+        tmp_item.suffix_id = sid unless refresh
+        tmp_item.suffix_id_multi << sid
       end
+      tmp_item.suffix_id = 0
+      ret = tmp_item
     end
+    ret
   end
+end # if AllowMultipleAffixes
 #------------------------------------------------------------------------------
 # * The code below are considered safe
-else
+#------------------------------------------------------------------------------
+# > Only needed if multiple affixies enabled
+if AllowMultipleAffixes
   #------------------------------------------------------------------------------
   # * New method: Extend affix effect on given item
   #------------------------------------------------------------------------------
-  def extend_affix_effect(item, pfid, sfid)
+  def self.extend_affix_effect(item, pfids, sfids, refresh=true)
+    pfids = [pfids || 0].flatten
+    sfids = [sfids || 0].flatten
     item = make_full_copy(item)
     convert2stackable_instance!(item)
-    if pfid > 0
-      item.prefix_id = pfid 
-      item.prefix_id_multi = (tmp_item.prefix_id_multi || []) << sfid
+    item.prefix_id_multi = (item.prefix_id_multi || [])
+    item.suffix_id_multi = (item.suffix_id_multi || [])
+    pfids.each do |pid|
+      item.prefix_id = pid unless refresh
+      item.prefix_id_multi << pid
     end
-    if sfid > 0
-      item.suffix_id = sfid
-      item.suffix_id_multi = (tmp_item.suffix_id_multi || []) << sfid
+    item.prefix_id = 0
+    sfids.each do |sid|
+      item.suffix_id = sid unless refresh
+      item.suffix_id_multi << sid
     end
+    item.suffix_id = 0
     item
   end
   #------------------------------------------------------------------------------
   # * New method: [DANGER] rewrite Hime's item refresh behaviors
   #------------------------------------------------------------------------------
-  def convert2stackable_instance!(item)
+  def self.convert2stackable_instance!(item)
     item.refresh
     _parent_instance = make_full_copy(item)    
     class << item
       attr_reader :parent_instance
       def refresh
         COMP::SpawnAffixItem::InstanceAttrs.each do |attr|
-          _method = methods(:"make_#{attr}")
+          _method = method(:"make_#{attr}")
           pvar = @parent_instance.instance_variable_get(:"@#{attr}")
           instance_variable_set(:"@#{attr}", _method.call(pvar))
         end
@@ -306,7 +357,8 @@ else
     item.instance_eval("@prefix_id = @suffix_id = 0")
     return item
   end
-end # if using template shifter 
+end # if AllowMultipleAffixes
+#------------------------------------------------------------------------------
 end # InstanceManager
 #==============================================================================
 # ** Game_Interpreter

@@ -2,7 +2,7 @@
 #   Multi-random Item Affixies                                                #
 #   Version: 1.0.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2021.09.0*                                                   #  
+#   Last update: 2021.09.08                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported["COMP_MRANDOM_AFFIX"] = true
@@ -75,13 +75,14 @@ module COMP
   end
 end
 
-if COMP::MultiRandomAffix::Enabled && (!$imported[:Sel_Random_Affixes] || 
-  !$imported["TH_InstanceItems"] || !$imported[:TH_ItemAffixes])
-  msgbox %{[WARNING] The dependency for MultiRandomAffixies are missing.
-  Please make sure the scripts is placed in right order!
-  (place SpawnAffix sciprt after the depended script)
-  }
-else
+if COMP::MultiRandomAffix::Enabled
+  if !$imported[:Sel_Random_Affixes] || !$imported["TH_InstanceItems"] || !$imported[:TH_ItemAffixes]
+    msgbox %{[WARNING] The dependency for MultiRandomAffixies are missing.
+    Please make sure the scripts is placed in right order!
+    (place SpawnAffix sciprt after the depended script)
+    }
+    exit
+  end
 #===============================================================================
 # ** RPG::EquipItem
 #===============================================================================
@@ -155,31 +156,5 @@ class RPG::EquipItem
     return 0
   end
 end
-#===============================================================================
-# * Check multi-affixies available
-if $imported["COMP_SPAWN_AFFITEM"] && COMP::SpawnAffixItem::AllowMultipleAffixes
-#===============================================================================
-# ** InstanceManager
-#===============================================================================
-module InstanceManager
-  #-----------------------------------------------------------------------------
-  # * Alias method: setup equip instance then apply multi-affix, if available
-  #-----------------------------------------------------------------------------
-  class << self; alias mulrand_affix_equip_setup setup_equip_instance; end
-  def self.setup_equip_instance(obj)
-    mulrand_affix_equip_setup(obj)
-    if obj.prefix_id_multi
-      ids = obj.prefix_id_multi.dup 
-      obj.prefix_id_multi.clear
-      ids.each{|i| extend_affix_effect(obj, i, 0)}
-    end
-    if obj.suffix_id_multi
-      ids = obj.prefix_id_multi.dup 
-      obj.suffix_id_multi.clear
-      ids.each{|i| extend_affix_effect(obj, 0, i)}
-    end
-  end
-end
-end # if multi-affixies available
 #-----------------------------------------------------------------------------
 end
