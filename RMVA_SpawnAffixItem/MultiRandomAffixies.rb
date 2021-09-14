@@ -10,6 +10,7 @@ $imported["COMP_MRANDOM_AFFIX"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2021.09.14: Complete the new requests.                                   #
 # -- 2021.09.08: Start the script and completed                               #
 #                                                                             #
 #=============================================================================#
@@ -47,7 +48,7 @@ $imported["COMP_MRANDOM_AFFIX"] = true
 #   > Hime's Instance Items is required                                       #
 #   > Hime's Item Affixes is required                                         #
 #   > Selchar's Random Affixes                                                #
-#   > (Optional) Compeador's Spawn Affix Item scipt                           #
+#   > (Optional) Compeador's Multi-Affix Item scipt                           #
 #                with AllowMultipleAffixes option enabled                     #
 #                                                                             #
 #       ** Place this script below the scripts mentioned above **             #
@@ -79,7 +80,7 @@ if COMP::MultiRandomAffix::Enabled
   if !$imported[:Sel_Random_Affixes] || !$imported["TH_InstanceItems"] || !$imported[:TH_ItemAffixes]
     msgbox %{[WARNING] The dependency for MultiRandomAffixies are missing.
     Please make sure the scripts is placed in right order!
-    (place SpawnAffix sciprt after the depended script)
+    (place MultiRandomAffix sciprt after the depended script)
     }
     exit
   end
