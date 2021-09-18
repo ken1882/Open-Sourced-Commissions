@@ -1,5 +1,5 @@
 #=============================================================================#
-#   Spawn Affix Item                                                          #
+#   Multi-Affix Item                                                          #
 #   Version: 1.1.0                                                            #  
 #   Author: Compeador                                                         #  
 #   Last update: 2021.09.07                                                   #  
@@ -40,6 +40,7 @@ $imported["COMP_SPAWN_AFFITEM"] = true
 #-----------------------------------------------------------------------------#
 # > Introduction:                                                             #
 #       This script adds script calls to give instance items with affixes.    #
+#   Also possiblity to add multiple affixies to item.                         #
 #                                                                             #
 #   script call usage:                                                        #
 #                                                                             #
@@ -136,7 +137,7 @@ if COMP::SpawnAffixItem::Enabled
 #==============================================================================
 # ** DataManager
 # ----------------------------------------------------------------------------
-#   Load database and copy as primitive set to restore later
+#   Load database and copy as primitive dataset to restore later
 #==============================================================================
 if COMP::SpawnAffixItem::UseTemplateShifter
 module DataManager
@@ -283,6 +284,7 @@ end # if multi-affixies available
 if AllowMultipleAffixes
   #------------------------------------------------------------------------------
   # * New method: Extend affix effect on given item (hacky)
+  #               Will NOT restore template after call
   #------------------------------------------------------------------------------
   def self.extend_affix_effect!(item, pfids, sfids, refresh=true)
     pfids = [pfids || 0].flatten
