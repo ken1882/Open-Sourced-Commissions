@@ -10,6 +10,7 @@ $imported["COMP_SPAWN_AFFITEM"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2021.09.18: Complete all new requests                                    #
 # -- 2021.09.08: Add possibility to add multiple affixies                     #
 # -- 2021.09.07: Start the script and completed                               #
 #                                                                             #
@@ -170,6 +171,7 @@ if COMP::SpawnAffixItem::AllowMultipleAffixes
 class RPG::EquipItem
   attr_accessor :prefix_id_multi
   attr_accessor :suffix_id_multi
+  attr_accessor :affix_inited
 end
 #===============================================================================
 # ** RPG::Item
@@ -177,7 +179,8 @@ end
 class RPG::Item
   attr_accessor :prefix_id_multi
   attr_accessor :suffix_id_multi
-end
+  attr_accessor :affix_inited
+end 
 end
 #==============================================================================
 # ** Module from Hime's script
@@ -194,15 +197,14 @@ if AllowMultipleAffixes
   class << self; alias multi_affix_equip_setup setup_equip_instance; end
   def self.setup_equip_instance(obj)
     multi_affix_equip_setup(obj)
+    return if obj.affix_inited
     pfids = (obj.prefix_id_multi || []).dup 
     sfids = (obj.suffix_id_multi || []).dup
-    obj.prefix_id_multi = obj.suffix_id_multi = []
-    if UseTemplateShifter
-      extend_affix_effect!(obj, pfids, sfids)
-      restore_template(obj)
-    else
-      extend_affix_effect(obj, pfids, sfids)
-    end
+    obj.prefix_id_multi = []
+    obj.suffix_id_multi = []
+    extend_affix_effect(obj, pfids, sfids)
+    obj.affix_inited = true
+    return obj
   end
 end # if multi-affixies available
   #------------------------------------------------------------------------------
@@ -214,7 +216,8 @@ end # if multi-affixies available
     sids = [suffix || 0].flatten
     if AllowMultipleAffixes
       if UseTemplateShifter
-        item = extend_affix_effect!(tmp_item, pids, sids, false)
+        item = extend_affix_effect!(tmp_item, pids, sids)
+        item.affix_inited = true
       else
         item = extend_affix_effect(tmp_item, pids, sids, false)
       end
@@ -290,13 +293,13 @@ if AllowMultipleAffixes
       tmp_item.suffix_id_multi = (tmp_item.suffix_id_multi || [])
       pfids.each do |pid|
         next if pid == 0
-        tmp_item.prefix_id = pid unless refresh
+        tmp_item.prefix_id = pid if refresh
         tmp_item.prefix_id_multi << pid
       end
       tmp_item.prefix_id = 0
       sfids.each do |sid|
         next if sid == 0
-        tmp_item.suffix_id = sid unless refresh
+        tmp_item.suffix_id = sid if refresh
         tmp_item.suffix_id_multi << sid
       end
       tmp_item.suffix_id = 0
@@ -316,20 +319,16 @@ if AllowMultipleAffixes
   def self.extend_affix_effect(item, pfids, sfids, refresh=true)
     pfids = [pfids || 0].flatten
     sfids = [sfids || 0].flatten
-    item = make_full_copy(item)
-    convert2stackable_instance!(item)
-    item.prefix_id_multi = (item.prefix_id_multi || [])
-    item.suffix_id_multi = (item.suffix_id_multi || [])
+    item.prefix_id_multi ||= []
+    item.suffix_id_multi ||= []
     pfids.each do |pid|
-      item.prefix_id = pid unless refresh
+      item.prefix_id = pid if refresh
       item.prefix_id_multi << pid
     end
-    item.prefix_id = 0
     sfids.each do |sid|
-      item.suffix_id = sid unless refresh
+      item.suffix_id = sid if refresh
       item.suffix_id_multi << sid
     end
-    item.suffix_id = 0
     item
   end
   #------------------------------------------------------------------------------

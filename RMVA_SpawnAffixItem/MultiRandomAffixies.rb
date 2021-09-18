@@ -10,6 +10,7 @@ $imported["COMP_MRANDOM_AFFIX"] = true
 #                               ** Update log **                              #
 #-----------------------------------------------------------------------------#
 #                                                                             #
+# -- 2021.09.18: Complete all new requests                                    #
 # -- 2021.09.08: Start the script and completed                               #
 #                                                                             #
 #=============================================================================#
@@ -41,6 +42,39 @@ $imported["COMP_MRANDOM_AFFIX"] = true
 # multiple affixies (if avaiable) applies to an item, also script call to     #
 # apply the same random effect.                                               #
 #                                                                             #
+#   Format:                                                                   #
+#   <random prefix({CHANCE_FLOAT}): {ID}@{WEIGHT}, {ID}@{WEIGHT}...>          #
+#   <random suffix({CHANCE_FLOAT}): {ID}@{WEIGHT}, {ID}@{WEIGHT}...>          #
+#                                                                             #
+#   Example:                                                                  #
+#   Just one prefix that guaranteed to get                                    #
+#     <random prefix(1.0): 123@1>                                             #
+#   * Chance is set to 1.0 (100%), with prefix id 123 and weight is 1         #
+#                                                                             #
+#   80% Chance to get one of two prefix:                                      #
+#     <random prefix(0.8): 123@1, 456@1>                                      #
+#   * Chance = 0.8 (80%)                                                      #
+#   * ID=123 with weight=1, ID=456 with weight=1. Since they have same        #
+#     weight so the chance to get one of them are 50-50                       #
+#                                                                             #
+#   Chance to get one of multiple preix with different chance                 #
+#     <random prefix(0.85): 100@6, 101@5, 102@4, 103@3>                       #
+#   * Chance = 0.85 (85%)                                                     #
+#   * The total weight is 6+5+4+3=18, so the chance to get each               #
+#     prefix is:                                                              #
+#     ID 100 => 6 / 18                                                        #
+#     ID 101 => 5 / 18                                                        #
+#     ID 102 => 4 / 18                                                        #
+#     ID 103 => 3 / 18                                                        #
+#                                                                             #
+#   If you want to set multiple prefix/suffix, be sure `AllowMultipleAffixes` #
+#   option is set to `true`; then just add another line in the note.          #
+#   Example:                                                                  #  
+#     <random prefix(0.85): 100@6, 101@5, 102@4, 103@3>                       #
+#     <random prefix(0.1): 123@1, 456@1>                                      #
+#     <random suffix(0.7): 500@2, 501@1>                                      #
+#     <random suffix(0.01): 510@10, 511@1>                                    #
+#                                                                             #
 #=============================================================================#
 #                            ** Compatibility **                              #
 #-----------------------------------------------------------------------------#
@@ -68,9 +102,6 @@ module COMP
     #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^#
 
     RegexFormat = /<random (suf|pre)fix\s?\((\d[.]\d+)?\):(.*)>/i
-    IdSep       = ','
-    WeightSep   = '@'
-
     RandAffixInfo = Struct.new(:chance, :ids, :weights)
   end
 end
@@ -95,6 +126,7 @@ class RPG::EquipItem
       @random_prefix = []
       @note.split(/[\r\n]+/).each do |line|
         next unless line =~ COMP::MultiRandomAffix::RegexFormat
+        next unless $1.downcase == 'pre'
         affix = COMP::MultiRandomAffix::RandAffixInfo.new($2.to_f, [], [])
         $3.split(',').each do |pair|
           id,weight = pair.split('@')
@@ -113,6 +145,7 @@ class RPG::EquipItem
       @random_suffix = []
       @note.split(/[\r\n]+/).each do |line|
         next unless line =~ COMP::MultiRandomAffix::RegexFormat
+        next unless $1.downcase == 'suf'
         affix = COMP::MultiRandomAffix::RandAffixInfo.new($2.to_f, [], [])
         $3.split(',').each do |pair|
           id,weight = pair.split('@')
@@ -145,11 +178,13 @@ class RPG::EquipItem
     
     # return random affix if only single affix allowed
     return ret.sample if !$imported["COMP_SPAWN_AFFITEM"] || !COMP::SpawnAffixItem::AllowMultipleAffixes
+    @prefix_id_multi ||= []
+    @suffix_id_multi ||= []
 
     # Save the multi-affix effect, let the InstanceManager handle the effects
     case affix_sym
-    when :prefix; @prefix_id_multi = ret;
-    when :suffix; @suffix_id_multi = ret;
+    when :prefix; @prefix_id_multi += ret;
+    when :suffix; @suffix_id_multi += ret;
     end
 
     # Avoid original random_affixes script mess up stuff
