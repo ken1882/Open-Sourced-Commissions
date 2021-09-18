@@ -2,7 +2,7 @@
 #   Multi-Affix Item                                                          #
 #   Version: 1.1.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2021.09.07                                                   #  
+#   Last update: 2021.09.18                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported["COMP_SPAWN_AFFITEM"] = true

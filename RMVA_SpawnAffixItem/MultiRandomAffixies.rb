@@ -1,8 +1,8 @@
 #=============================================================================#
 #   Multi-random Item Affixies                                                #
-#   Version: 1.0.0                                                            #  
+#   Version: 1.1.0                                                            #  
 #   Author: Compeador                                                         #  
-#   Last update: 2021.09.08                                                   #  
+#   Last update: 2021.09.18                                                   #  
 #=============================================================================#
 $imported = {} if $imported.nil?
 $imported["COMP_MRANDOM_AFFIX"] = true
